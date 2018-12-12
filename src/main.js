@@ -1,7 +1,7 @@
 export const main = async () => {
   document.body.textContent = "Installing a service worker"
   try {
-    const serviceURL = "./service.js"
+    const serviceURL = new URL("./service.js", import.meta.url)
     const registration = await navigator.serviceWorker.register(serviceURL, {
       scope: "/"
     })
