@@ -1,4 +1,4 @@
-export const main = () => {
+export const main = async () => {
   document.body.textContent = "Installing a service worker"
   try {
     const serviceURL = "./service.js"
