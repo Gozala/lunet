@@ -3,7 +3,7 @@ export const main = async () => {
   try {
     const serviceURL = new URL("./service.js", import.meta.url)
     const registration = await navigator.serviceWorker.register(serviceURL, {
-      scope: "/"
+      scope: new URL(location).pathname
     })
     document.body.textContent = `Service worker registred ${registration}`
     registration.update()
