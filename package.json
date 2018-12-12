@@ -1,0 +1,14 @@
+{
+  "name": "symbiont",
+  "version": "0.0.1",
+  "description": "A local peer agent",
+  "scripts": {
+    "start": "webrun --allow-require src/main.js"
+  },
+  "dependencies": {
+    "@mattiasbuelens/web-streams-polyfill": "0.2.0",
+    "web-streams-node": "0.3.1",
+    "@rangermauve/webrun": "3.0.2"
+  },
+  "license": "MPL-2"
+}
