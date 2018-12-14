@@ -11,8 +11,9 @@ self.addEventListener("activate", function(event) {
 
 self.addEventListener("fetch", function(event) {
   const { request } = event
-  const body = `<h1>Hello there</h1><p>You've fetched ${request.url}</p>`
-  if (url.pathname === "/") {
+  const url = new URL(request.url)
+  if (url.pathname === "/" || url.pathname === "/lunet/") {
+    const body = `<h1>Hello there</h1><p>You've fetched ${request.url}</p>`
     event.respondWith(
       new Response(body, {
         status: 200,
