@@ -13,7 +13,9 @@ self.addEventListener("fetch", function(event) {
   const { request } = event
   const url = new URL(request.url)
   if (url.pathname === "/" || url.pathname === "/lunet/") {
-    const body = `<h1>Hello there</h1><p>You've fetched ${request.url}</p>`
+    const body = `<h1>Hello there</h1><p>You've fetched ${
+      request.url
+    }</p><p><a href="./local-proxy">Attempt to load 127.0.0.1:9000</a></p>`
     event.respondWith(
       new Response(body, {
         status: 200,
