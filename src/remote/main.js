@@ -1,27 +1,37 @@
-import ENV from "../local/env.js"
-import { server, Response } from "../local/https.js"
-import { File } from "../local/file.js"
-import mime from "../local/mime.js"
+// @flow strict
 
-const baseURL = import.meta.url
+import ENV from "../universal/env.js"
+import { listen, Response } from "../universal/http.js"
+import { File } from "../universal/file.js"
+import mime from "../universal/mime.js"
+import { baseURL } from "../../package.js"
+import ssl from "../universal/ssl.js"
 
 const main = async port => {
   console.log("Starting main")
-  const keyURL = new URL("../../.env/localhost.key", baseURL)
-  const certificateURL = new URL("../../.env/localhost.certificate", baseURL)
-  const keyFile = await File.fromURL(keyURL)
-  const certificateFile = await File.fromURL(certificateURL)
-  const key = await keyFile.readAsText()
-  const certificate = await certificateFile.readAsText()
-  const host = server(port, { key, certificate })
-  for await (const connection of host.listen()) {
+
+  const { key, certificate } = await ssl({
+    key: new URL("./.env/remote-key.pem", baseURL),
+    certificate: new URL("./.env/remote-certificate.pem", baseURL),
+    name: "lunet.link",
+    names: [
+      "DNS:lunet.link",
+      "DNS:*.lunet.link",
+      "IP:127.0.0.1",
+      "IP:0.0.0.0",
+      "IP:::1",
+      "IP:::"
+    ]
+  })
+
+  for await (const connection of listen(port, { key, certificate })) {
     void request(connection)
   }
 }
 
 const request = async request => {
   console.log(request.url, request.method, request.headers)
-  const path = `./static${request.url}`
+  const path = `./src/remote/static${request.url}`
   const url = new URL(path.endsWith("/") ? `${path}index.html` : path, baseURL)
   try {
     const file = await File.fromURL(url)

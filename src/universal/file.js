@@ -1,9 +1,25 @@
-const { resolve, join, basename, dirname } = self.require("path")
-const { stat, open, read, write } = self.require("fs").promises
-const { Buffer } = self.require("buffer")
+// @flow strict
+
+const { require } = self
+const { resolve, join, basename, dirname } = require("path")
+const { stat, open, read, write } = require("fs").promises
+const { Buffer } = require("buffer")
+
+/*::
+import type {Stats} from "fs"
+*/
 
 class FileBlob {
-  constructor(start = 0, end = 0, contentType = "application/octet-stream") {
+  /*::
+  start:number;
+  end:number;
+  contentType:string;
+  */
+  constructor(
+    start /*:number*/ = 0,
+    end /*:number*/ = 0,
+    contentType /*:string*/ = "application/octet-stream"
+  ) {
     this.start = start
     this.end = end
     this.contentType = contentType
@@ -17,11 +33,15 @@ class FileBlob {
 }
 
 export class File extends FileBlob {
-  static async fromURL(url /*:URL*/, contentType) {
+  static async fromURL(url /*:URL*/, contentType /*::?:string*/) {
     const info = await stat(url.pathname)
     return new File(url, info, contentType)
   }
-  constructor(url, info, contentType) {
+  /*::
+  url:URL
+  info:Stats
+  */
+  constructor(url /*:URL*/, info /*:Stats*/, contentType /*::?:string*/) {
     super(0, info.size, contentType)
     this.url = url
     this.info = info
@@ -32,7 +52,7 @@ export class File extends FileBlob {
   lastModifiedDate() {
     return this.info.mtime
   }
-  async readAsText() {
+  async readAsText() /*:Promise<string>*/ {
     let file = null
     try {
       const buffer = Buffer.alloc(this.size)
@@ -53,10 +73,16 @@ export class File extends FileBlob {
 
 export class FileReader {
   abort() {}
-  readAsArrayBuffer(blob) {}
-  readAsBinaryString(blob) {}
-  readAsDataURL(blob) {}
-  readAsText(blob) {
+  readAsArrayBuffer(blob /*:Blob*/) /*:ArrayBuffer*/ {
+    throw Error("Not implemented")
+  }
+  readAsBinaryString(blob /*:Blob*/) {
+    throw Error("Not implemented")
+  }
+  readAsDataURL(blob /*:Blob*/) {
+    throw Error("Not implemented")
+  }
+  readAsText(blob /*:File*/) {
     return blob.readAsText()
   }
 }
