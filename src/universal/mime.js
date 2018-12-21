@@ -1,3 +1,3 @@
-const mime = self.require("mime-types")
+const mime = require("mime-types")
 
 export default mime

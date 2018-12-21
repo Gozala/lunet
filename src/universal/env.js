@@ -1,1 +1,1 @@
-export default self.require("process").env
+export default require("process").env

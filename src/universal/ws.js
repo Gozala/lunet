@@ -1,6 +1,6 @@
 // @flow strict
 
-const { Server } = self.WebSocket || self.Websocket
+const WS = require("ws")
 
 /*::
 import * as HTTP from "./http.js"
@@ -8,11 +8,9 @@ import * as HTTP from "./http.js"
 type Options =
   | { port: number, server?:HTTP.Server }
   | { server:HTTP.Server }
-
-
 */
 
-class WebSocketServer extends Server {
+class WebSocketServer extends WS.Server {
   /*::
   opened:Promise<void>;
   closed:Promise<void>;

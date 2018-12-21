@@ -1,7 +1,5 @@
 // @flow strict
 
-const { require } = self
-
 const { toWebReadableStream } = require("web-streams-node")
 const {
   ReadableStream,
@@ -13,6 +11,7 @@ const { createServer: createHTTPServer } = require("http")
 const { createServer: createHTTPSServer } = require("https")
 /*::
 import * as HTTP from "http"
+import * as HTTPS from "https"
 
 export type TLSOptions = {
   key: string;
@@ -54,9 +53,9 @@ class Connection extends Request {
 
 class Server {
   /*::
-  server:HTTP.Server;
+  server:HTTP.Server|HTTPS.Server;
   */
-  constructor(server /* : HTTP.Server */) {
+  constructor(server /*:HTTP.Server|HTTPS.Server*/) {
     this.server = server
   }
   async *listen(port /*:number*/) /*:AsyncGenerator<Connection, void, void>*/ {

@@ -1,6 +1,5 @@
 // @flow strict
 
-const { require } = self
 const { resolve, join, basename, dirname } = require("path")
 const { stat, open, read, write } = require("fs").promises
 const { Buffer } = require("buffer")
@@ -47,7 +46,7 @@ export class File extends FileBlob {
     this.info = info
   }
   name() {
-    return basename(this.url)
+    return basename(this.url.href)
   }
   lastModifiedDate() {
     return this.info.mtime
