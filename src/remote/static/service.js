@@ -1,9 +1,5 @@
 self.addEventListener("install", function(event) {
   console.log("ServiceWorker was installed", event)
-  // event.registerForeignFetch({
-  //  scopes: [self.registration.scope], // or some sub-scope
-  //  origins: ['*'] // or ['https://example.com']
-  // });
 
   event.waitUntil(self.skipWaiting())
 })
@@ -38,7 +34,7 @@ self.addEventListener("fetch", async function(event) {
 
 const routeRequest = async url => {
   try {
-    const localURL = new URL(url.pathname, `http://127.0.0.1:9000`)
+    const localURL = new URL(url.pathname, `https://127.0.0.1:9000`)
     console.log("Request", localURL)
     const response = await fetch(localURL)
     console.log("Response", response)

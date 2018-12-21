@@ -15,10 +15,10 @@ const ws = async connections => {
 
 const handlerSocket = socket => {
   console.log("ws connection", socket)
-  socket.addEventListener("message", event => {
-    console.log(`<<< WS ${event.data}`)
-    socket.send(`Echo ${event.data}`)
-  })
+  socket.onmessage = event => {
+    console.log(`<<< WS ${String(event.data)}`)
+    socket.send(`Echo ${String(event.data)}`)
+  }
   socket.send(`Hello`)
 }
 
