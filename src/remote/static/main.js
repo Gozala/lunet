@@ -26,6 +26,7 @@ const activate = async () => {
   try {
     const request = await fetch(location.href)
     const content = await request.text()
+    const parser = new DOMParser()
     const { documentElement } = parser.parseFromString(content, "text/html")
     document.documentElement.replaceWith(documentElement)
   } catch (error) {

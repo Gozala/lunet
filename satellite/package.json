@@ -1,0 +1,26 @@
+{
+  "name": "lunet.satellite",
+  "version": "0.0.1",
+  "description": "Satellite native appilaction for lunet",
+  "scripts": {
+    "start": "electron .",
+    "local": "webrun --allow-require src/local/main.js",
+    "remote": "webrun --allow-require src/remote/main.js",
+    "certify": "cd .env && openssl req -x509 -out localhost.certificate -keyout localhost.key -newkey rsa:2048 -nodes -sha256  -subj '/CN=localhost' -extensions EXT -config ../localhost.config"
+  },
+  "main": "./src/main.js",
+  "dependencies": {
+    "@mattiasbuelens/web-streams-polyfill": "0.2.0",
+    "@rangermauve/webrun": "3.0.2",
+    "esm": "3.0.84",
+    "mime-types": "2.1.21",
+    "opn": "5.4.0",
+    "tls-keygen": "3.6.1",
+    "web-streams-node": "0.3.1"
+  },
+  "license": "MPL-2.0",
+  "devDependencies": {
+    "cross-env": "5.2.0",
+    "electron": "4.0.0"
+  }
+}

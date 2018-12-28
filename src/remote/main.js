@@ -40,7 +40,8 @@ const request = async request => {
       new Response(content, {
         status: 200,
         headers: {
-          "Content-Type": mime.lookup(url.pathname)
+          "Content-Type": mime.lookup(url.pathname),
+          "Access-Control-Allow-Origin": "*"
         }
       })
     )

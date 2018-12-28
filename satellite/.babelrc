@@ -1,0 +1,5 @@
+{
+  "presets": ["eslatest-node6"],
+  "plugins": ["syntax-async-functions", "syntax-async-generators"],
+  "sourceMaps": "inline"
+}
