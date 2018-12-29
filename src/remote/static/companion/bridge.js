@@ -9,12 +9,13 @@ class Companion {
   }
   async onMessage({ data, ports, origin, source }) {
     console.log("connection request", { data, origin, ports })
+    // TODO: Handle a case where lunet.link has not being visite and no
+    // sw is registered yet.
     await navigator.serviceWorker.ready
     navigator.serviceWorker.controller.postMessage(
       { info: data, origin },
       ports
     )
-    void fetch(new URL("../keep-alive!", location))
   }
   handleEvent(event) {
     switch (event.type) {

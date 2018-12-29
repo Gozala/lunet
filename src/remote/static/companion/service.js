@@ -1,62 +1,119 @@
 // @flow strict
 
-self.addEventListener("install", function(event) {
-  console.log("ServiceWorker was installed", event)
+const baseURI = new URL("https://lunet.link/")
 
-  self.skipWaiting()
+// Companion service is used p2p sites / applications. Site uses embedded
+// `iframe` with `companion/bridge.html` to connect this SW with an
+// "access point" SW allowing site / app to load all of the data from the p2p
+// network.
+
+self.addEventListener("install", function(event) {
+  console.log(`Companion service worker is installed for ${self.origin}`)
+  // We cache all the companion assets because occasionally we will need to
+  // reconnect to the "access point" SW and if we won't be able to do so
+  // while offline (as access point doesn't serve across origins).
+  event.waitUntil(initCache())
 })
 
 self.addEventListener("activate", function(event) {
-  console.log("ServiceWorker was activated", event)
+  console.log(`Companion service worker is activated for ${self.origin}`)
+
   event.waitUntil(self.clients.claim())
 })
 
 self.addEventListener("fetch", function(event) {
-  console.log("fetch from service worker", event)
+  console.log(`Companion at ${self.origin} got fetch request`, event)
   const { request } = event
-  event.respondWith(handleRequest(request))
+  event.respondWith(matchRoute(request))
 })
 
 self.addEventListener("message", function({ data, ports, source }) {
   const [port] = ports
-  const { origin, info } = data
-  console.log("connected", {
-    origin,
-    port,
-    info
-  })
 
-  accessPoint = new AccessPoint(port)
-
-  source.postMessage("ready")
+  connection = Connection.new(port, source)
+  console.log(
+    `Companion at ${self.origin} was connected an access point`,
+    connection
+  )
 })
 
-let accessPoint = null
+let connection = null
 
-class AccessPoint {
+/*::
+type EncodedResponse = {
+  type:"response";
+  id:number;
+  buffer:ArrayBuffer;
+  url:string;
+  status:number;
+  statusText:string;
+  destination:string;
+  headers:{[key: string]: string};
+  integrity: string;
+  method: string;
+  mode: string;
+  redirect: boolean;
+  referrer: string;
+  referrerPolicy: string;
+}
+
+type Alive = {
+  type:"alive"
+}
+
+type Message =
+  | Alive
+  | EncodedResponse
+*/
+class Connection {
   /*::
   id:number
+  time:number
   port:MessagePort
-  pendingRequests: {[number]:(MessageEvent) => void}
+  pendingRequests: {[number]:(EncodedResponse) => void}
   */
+  static new(port /*:MessagePort*/, source /*:WindowProxy*/) {
+    const self = new this(port)
+    source.postMessage("ready")
+    return self
+  }
+  isAlive() {
+    return Date.now() - this.time < 200
+  }
   constructor(port /*:MessagePort*/) {
+    this.time = Date.now()
     this.id = 0
     this.port = port
     port.start()
-    this.port.onmessage = message => this.onMessage(message)
+    this.port.onmessage = (message /*:Object*/) => this.receive(message.data)
     this.pendingRequests = {}
   }
-  onMessage({ data }) {
-    console.log(data)
-    const pendingRequest = this.pendingRequests[data.id]
-    if (pendingRequest) {
-      pendingRequest(data)
-    } else {
-      console.warn(`Unable to find request for id ${data.id}`, data)
+  receive(message /*:Message*/) {
+    switch (message.type) {
+      case "alive": {
+        return this.alive()
+      }
+      case "response": {
+        return this.respond(message)
+      }
     }
   }
-  receive(id /*:number*/) /*:Promise<MessageEvent>*/ {
-    return new Promise((resolve /*:MessageEvent => void*/) => {
+  alive() {
+    this.time = Date.now()
+  }
+  respond(encodedResponse /*:EncodedResponse*/) {
+    const pendingRequest = this.pendingRequests[encodedResponse.id]
+    if (pendingRequest) {
+      pendingRequest(encodedResponse)
+    } else {
+      console.warn(
+        `Unable to find request for id ${encodedResponse.id}`,
+        encodedResponse
+      )
+    }
+  }
+  wait(id /*:number*/) /*:Promise<EncodedResponse>*/ {
+    return new Promise((resolve /*:EncodedResponse => void*/) => {
       this.pendingRequests[id] = resolve
     })
   }
@@ -81,7 +138,7 @@ class AccessPoint {
       [buffer]
     )
 
-    const response /*:any*/ = await this.receive(id)
+    const response = await this.wait(id)
     return new Response(response.buffer, {
       status: response.status,
       statusText: response.statusText,
@@ -90,19 +147,85 @@ class AccessPoint {
   }
 }
 
-const handleRequest = async request => {
-  if (accessPoint) {
-    return await accessPoint.request(request)
-  } else if (new URL(request.url).origin === self.origin) {
-    return new Response(
-      `<script type="module" src="https://lunet.link/companion/api.js"></script>`,
-      {
-        headers: {
-          "Content-Type": "text/html"
-        }
-      }
-    )
-  } else {
-    return fetch(request.url)
+const matchRoute = async request => {
+  const url = new URL(request.url)
+  // If matches companion route serve it from cache
+  if (url.origin === baseURI.origin) {
+    return companionRoute(request)
   }
+  // If connected to access point use it to fetch underlying content.
+  else if (connection && connection.isAlive()) {
+    return await connection.request(request)
+  }
+  // If not connected to access point then load a page that would
+  // establish connection.
+  // TODO: We should probably use redirects here instead.
+  else if (url.origin === self.origin) {
+    return await connectRoute(request)
+  }
+  // Otherwise it is fetch to some other foreign origin in which case we
+  // just serve it through fetch.
+  else {
+    return foreignFetch(request.url)
+  }
+}
+
+const foreignFetch = url => fetch(url, { mode: "no-cors" })
+
+const companionRoute = async request => {
+  const cache = await caches.open("companion")
+  const response = await cache.match(request)
+  if (response) {
+    return response
+  } else {
+    return notFound(request)
+  }
+}
+
+const connectRoute = async request => {
+  return new Response(
+    `<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>P2P Site</title>
+    <script
+      type="module"
+      async
+      defer
+      src="https://lunet.link/companion/embed.js"
+    ></script>
+  </head>
+  <body></body>
+</html>
+`,
+    {
+      status: 200,
+      headers: {
+        "Content-Type": "text/html"
+      }
+    }
+  )
+}
+
+// Non existing documents under `companion` route.
+const notFound = async request => {
+  return new Response("<h1>Page Not Found</h1>", {
+    status: 404,
+    headers: {
+      "content-type": "text/html"
+    }
+  })
+}
+
+const initCache = async () => {
+  console.log(`Init companion cache for ${self.origin}`)
+  const cache = await caches.open("companion")
+  const urls = [
+    new URL("./companion/bridge.html", baseURI),
+    new URL("./companion/bridge.js", baseURI),
+    new URL("./companion/embed.js", baseURI),
+    new URL("./companion/service.js", baseURI)
+  ]
+  console.log(`Companion "${self.origin}" is caching`, urls)
+  return cache.addAll(urls)
 }

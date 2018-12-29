@@ -1,15 +1,19 @@
-export const client = async () => {
+export const embed = async () => {
   try {
     const baseURL = new URL("https://lunet.link/companion/")
     setStatusMessage(
       "⚙️ Setting application to serve you even without interent."
     )
-    const registration = await navigator.serviceWorker.register(
-      "./lunet.link.companion.service.js",
-      {
-        scope: new URL(location).pathname
-      }
-    )
+
+    let registration = null
+    if (!navigator.serviceWorker.controller) {
+      registration = await navigator.serviceWorker.register(
+        "./lunet.link.companion.service.js?_=3",
+        {
+          scope: new URL(location).pathname
+        }
+      )
+    }
     // try {
     //   await registration.update()
     // } catch (error) {
@@ -51,4 +55,4 @@ const setStatusMessage = message => {
   document.body.textContent = message
 }
 
-client()
+embed()
