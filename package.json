@@ -4,8 +4,7 @@
   "description": "A local peer agent",
   "scripts": {
     "local": "webrun --allow-require src/local/main.js",
-    "remote": "webrun --allow-require src/remote/main.js",
-    "certify": "cd .env && openssl req -x509 -out localhost.certificate -keyout localhost.key -newkey rsa:2048 -nodes -sha256  -subj '/CN=localhost' -extensions EXT -config ../localhost.config"
+    "remote": "webrun --allow-require src/remote/main.js"
   },
   "dependencies": {
     "@mattiasbuelens/web-streams-polyfill": "0.2.0",

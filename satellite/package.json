@@ -3,10 +3,7 @@
   "version": "0.0.1",
   "description": "Satellite native appilaction for lunet",
   "scripts": {
-    "start": "electron .",
-    "local": "webrun --allow-require src/local/main.js",
-    "remote": "webrun --allow-require src/remote/main.js",
-    "certify": "cd .env && openssl req -x509 -out localhost.certificate -keyout localhost.key -newkey rsa:2048 -nodes -sha256  -subj '/CN=localhost' -extensions EXT -config ../localhost.config"
+    "start": "electron ."
   },
   "main": "./src/main.js",
   "dependencies": {
