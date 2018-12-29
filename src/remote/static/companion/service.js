@@ -77,9 +77,6 @@ class Connection {
     source.postMessage("ready")
     return self
   }
-  isAlive() {
-    return Date.now() - this.time < 200
-  }
   constructor(port /*:MessagePort*/) {
     this.time = Date.now()
     this.id = 0
@@ -98,8 +95,15 @@ class Connection {
       }
     }
   }
+  // Access point service worker will send "alive" messages to every connected
+  // companion. We update time on every such message.
   alive() {
     this.time = Date.now()
+  }
+  // By tracking time of last received "alive" message we can figure out if
+  // connection is still alive or had being dropped.
+  isAlive() {
+    return Date.now() - this.time < 200
   }
   respond(encodedResponse /*:EncodedResponse*/) {
     const pendingRequest = this.pendingRequests[encodedResponse.id]
@@ -153,13 +157,19 @@ const matchRoute = async request => {
   if (url.origin === baseURI.origin) {
     return companionRoute(request)
   }
-  // If connected to access point use it to fetch underlying content.
+  // If connected to access point and connection is still alive forward
+  // underlying request.
   else if (connection && connection.isAlive()) {
     return await connection.request(request)
   }
-  // If not connected to access point then load a page that would
-  // establish connection.
-  // TODO: We should probably use redirects here instead.
+  // If no live connection is found to access point we load a page that would
+  // allow us to reestablish connection.
+  // TODO: We need to use a better reconnection stategy, as requests here may be
+  // be for some non-html resource e.g. script or image serving page that does
+  // reconnection as we do only works in cases where it's a navigation.
+  // If it's not a navigation request than it's coming from a loaded document
+  // that would be in `self.clients` so we probably well need to exploit one of
+  // such document to reconnect and put this request in the queue until than.
   else if (url.origin === self.origin) {
     return await connectRoute(request)
   }
@@ -182,6 +192,8 @@ const companionRoute = async request => {
   }
 }
 
+// Here we generate a basic page that goes through embedding flow to create
+// connection with an access-point SW.
 const connectRoute = async request => {
   return new Response(
     `<html>
