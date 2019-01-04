@@ -183,11 +183,13 @@ const satelliteRoute = async url => {
         localURL.href
       }`
     )
-    return await fetch(localURL)
+    const response = await fetch(localURL)
+    return new Response(request.body, {
+      status: response.status
+    })
   } catch (error) {
     return new Response(error.toString(), {
-      status: 500,
-      "Access-Control-Allow-Origin": "*"
+      status: 500
     })
   }
 }
