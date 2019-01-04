@@ -7,10 +7,10 @@
     "remote": "webrun --allow-require src/remote/main.js"
   },
   "dependencies": {
-    "@mattiasbuelens/web-streams-polyfill": "0.2.0",
-    "@rangermauve/webrun": "3.0.2",
+    "@mattiasbuelens/web-streams-polyfill": "0.2.1",
+    "@rangermauve/webrun": "3.1.0",
     "mime-types": "2.1.21",
-    "tls-keygen": "3.6.1",
+    "tls-keygen": "3.7.0",
     "web-streams-node": "0.3.1",
     "ws": "6.1.2"
   },
