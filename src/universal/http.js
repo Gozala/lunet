@@ -9,6 +9,8 @@ const {
 const { Headers, Request, Response } = require("node-fetch")
 const { createServer: createHTTPServer } = require("http")
 const { createServer: createHTTPSServer } = require("https")
+import { fromEntries } from "./Object.js"
+
 /*::
 import * as HTTP from "http"
 import * as HTTPS from "https"
@@ -18,14 +20,6 @@ export type TLSOptions = {
   certificate: string;
 }
 */
-
-const toNodeHeaders = headers => {
-  const result = {}
-  for (const [key, value] of headers.entries()) {
-    result[key] = value
-  }
-  return result
-}
 
 class Connection extends Request {
   constructor(
@@ -43,7 +37,10 @@ class Connection extends Request {
     return this.data
   }
   async respond(response /*:Response*/) {
-    this.response.writeHead(response.status, toNodeHeaders(response.headers))
+    this.response.writeHead(
+      response.status,
+      fromEntries(response.headers.entries())
+    )
     for await (const chunk of response.body) {
       this.response.write(chunk)
     }

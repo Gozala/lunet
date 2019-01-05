@@ -1,2 +1,5 @@
+[ignore]
+<PROJECT_ROOT>/node_modules/ipfs/test/*
+
 [options]
 suppress_comment= \\(.\\|\n\\)*\\noflow

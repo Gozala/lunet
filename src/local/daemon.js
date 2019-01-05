@@ -1,10 +1,11 @@
 // @flow strict
 
 import ENV from "../universal/env.js"
-import { server, Response } from "../universal/http.js"
+import { server, Response, Headers } from "../universal/http.js"
 import { File } from "../universal/file.js"
 import * as WS from "../universal/ws.js"
 import { baseURL } from "../../package.js"
+import { fromEntries } from "../universal/Object.js"
 import ssl from "../universal/ssl.js"
 
 const ws = async connections => {
@@ -28,28 +29,34 @@ const serve = async connections => {
   }
 }
 
+const REST_URL = "http://127.0.0.1:5001"
+
 const request = async request => {
-  console.log("<<<", request)
   const origin = request.headers.get("origin") || ""
   const allowOrigin = origin.endsWith("lunet.link")
     ? origin
     : // : "https://lunet.link"
       "*"
 
-  const response = new Response(
-    `<html><head><meta charset="UTF-8" /></head><body>Response from ${
-      request.url
-    }</body></html>`,
-    {
-      status: 200,
-      headers: {
-        "Content-Type": "text/html",
-        "Access-Control-Allow-Origin": allowOrigin
-      }
-    }
-  )
+  const endpoint = new URL(request.url, REST_URL)
+  console.log("request.url", endpoint.href)
+  try {
+    const apiResponse = await fetch(endpoint.href)
 
-  request.respond(response)
+    const headers = {
+      ...fromEntries(apiResponse.headers.entries()),
+      "Access-Control-Allow-Origin": allowOrigin
+    }
+
+    const response = new Response(apiResponse.body, {
+      status: 200,
+      headers: new Headers(headers)
+    })
+
+    request.respond(response)
+  } catch (error) {
+    console.warn(error)
+  }
 }
 
 export default async (port /*:number*/) => {
