@@ -110,12 +110,13 @@ const matchRoute = request => {
     case "companion": {
       return companionRoute(request)
     }
+    // Disable for now since GH pages do not handler * subdomains.
     // For IPFS / IPNS routes we will want to perfrom redirects to move CID into
     // origin (for isolation) and serve data from there.
-    case "ipfs":
-    case "ipns": {
-      return subdomainRoute(request)
-    }
+    // case "ipfs":
+    // case "ipns": {
+    //   return subdomainRoute(request)
+    // }
     // All the other routes JUST proxy to the native app.
     default: {
       return satelliteRoute(url)
