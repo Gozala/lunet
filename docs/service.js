@@ -184,7 +184,7 @@ const satelliteRoute = async url => {
       }`
     )
     const response = await fetch(localURL)
-    return new Response(request.body, {
+    return new Response(response.body, {
       status: response.status
     })
   } catch (error) {
