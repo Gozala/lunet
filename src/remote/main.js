@@ -15,6 +15,7 @@ const main = async port => {
     certificate: new URL("./.env/remote-certificate.pem", baseURL),
     name: "lunet.link",
     names: [
+      "DNS:localhost",
       "DNS:lunet.link",
       "DNS:*.lunet.link",
       "IP:127.0.0.1",
@@ -31,8 +32,12 @@ const main = async port => {
 
 const request = async request => {
   console.log(request.url, request.method, request.headers)
-  const path = `./src/remote/static${request.url}`
+  console.log(baseURL)
+  const path = `./docs${request.url}`
   const url = new URL(path.endsWith("/") ? `${path}index.html` : path, baseURL)
+
+  console.log(url)
+
   try {
     const file = await File.fromURL(url)
     const content = await file.readAsText()

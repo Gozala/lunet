@@ -11,7 +11,7 @@ export const main = async () => {
     )
     // Register "access point" service worker that will serve all the p2p sites
     // through `MessagePort` instances.
-    const serviceURL = new URL("https://lunet.link/service.js", location.href)
+    const serviceURL = new URL("/service.js", location.href)
     // Uses the scope of the page it's served from.
     const registration = await navigator.serviceWorker.register(serviceURL, {
       scope: new URL(location).pathname
