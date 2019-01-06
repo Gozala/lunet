@@ -69,7 +69,7 @@ class Connection {
       request
     )
 
-    const response = await satelliteRoute(new URL(request.url))
+    const response = await satelliteRoute(request)
     const buffer = await response.arrayBuffer()
     this.port.postMessage(
       {
@@ -119,7 +119,7 @@ const matchRoute = request => {
     // }
     // All the other routes JUST proxy to the native app.
     default: {
-      return satelliteRoute(url)
+      return satelliteRoute(request)
     }
   }
 }
@@ -174,21 +174,27 @@ const subdomainRoute = async request => {
 // longer able to talk to it.
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
 
+const REST_SERVICE_URL = new URL("https://127.0.0.1:9000")
+
+const updateHost = (url, hostURL) =>
+  new URL(`${url.pathname}${url.search}`, hostURL)
+
 // This just routes requests to local systray app. In practice we would want to
 // try bunch of different ways to get the content instead.
-const satelliteRoute = async url => {
+const satelliteRoute = async request => {
   try {
-    const localURL = new URL(url.pathname, `https://127.0.0.1:9000`)
+    const url = new URL(request.url)
+    const endpointURL = updateHost(url, REST_SERVICE_URL)
     console.log(
       `Access point proxying request for ${url.href} to native app at ${
-        localURL.href
+        endpointURL.href
       }`
     )
-    const response = await fetch(localURL)
+    const response = await fetch(endpointURL)
     const headers = new Headers(response.headers.entries())
 
-    if (response.url !== localURL.href) {
-      const location = new URL(new URL(response.url).pathname, url)
+    if (response.url !== endpointURL.href) {
+      const location = updateHost(new URL(response.url), url)
       headers.set("location", location.href)
       return new Response(response.body, {
         status: 302,
@@ -197,7 +203,7 @@ const satelliteRoute = async url => {
     } else {
       return new Response(response.body, {
         status: response.status,
-        headers: response
+        headers
       })
     }
   } catch (error) {
