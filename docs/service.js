@@ -185,18 +185,19 @@ const satelliteRoute = async url => {
       }`
     )
     const response = await fetch(localURL)
+    const headers = new Headers(response.headers.entries())
 
     if (response.url !== localURL.href) {
       const location = new URL(new URL(response.url).pathname, url)
-      response.headers.set("location", location.href)
+      headers.set("location", location.href)
       return new Response(response.body, {
         status: 302,
-        headers: response.headers
+        headers
       })
     } else {
       return new Response(response.body, {
         status: response.status,
-        headers: response.headers
+        headers: response
       })
     }
   } catch (error) {
