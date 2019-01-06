@@ -26,7 +26,10 @@ class Connection extends Request {
     request /*:HTTP.IncomingMessage*/,
     response /*:HTTP.ServerResponse*/
   ) {
-    super(request.url, {
+    const socket /*:any*/ = request.socket
+    const protocol = socket.encrypted ? "https" : "http"
+    const url = `${protocol}://${request.headers.host}${request.url}`
+    super(url, {
       headers: new Headers(request.headers),
       method: request.method
     })

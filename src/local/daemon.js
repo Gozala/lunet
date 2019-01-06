@@ -29,27 +29,42 @@ const serve = async connections => {
   }
 }
 
-const REST_URL = "http://127.0.0.1:5001"
+const REST_SERVICE_URL = new URL("http://127.0.0.1:5001")
+
+const updateHost = (url, hostURL) =>
+  new URL(`${url.pathname}${url.search}`, hostURL)
 
 const request = async request => {
+  const url = new URL(request.url)
   const origin = request.headers.get("origin") || ""
   const allowOrigin = origin.endsWith("lunet.link")
     ? origin
     : // : "https://lunet.link"
       "*"
 
-  const endpoint = new URL(request.url, REST_URL)
+  const endpoint = updateHost(url, REST_SERVICE_URL)
   console.log("request.url", endpoint.href)
   try {
-    const apiResponse = await fetch(endpoint.href)
+    const apiResponse = await fetch(endpoint.href, {
+      redirect: "manual"
+    })
 
     const headers = {
       ...fromEntries(apiResponse.headers.entries()),
-      "Access-Control-Allow-Origin": allowOrigin
+      "access-control-allow-origin": allowOrigin,
+      "access-control-allow-visible-redirect": allowOrigin
     }
 
+    if (headers.location) {
+      const location = updateHost(new URL(headers.location), url)
+      headers.location = location.href
+    }
+
+    console.log("response.headers", headers)
+
     const response = new Response(apiResponse.body, {
-      status: 200,
+      status: apiResponse.status,
+      statusText: apiResponse.statusText,
       headers: new Headers(headers)
     })
 
