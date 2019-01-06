@@ -184,22 +184,21 @@ const satelliteRoute = async url => {
         localURL.href
       }`
     )
-    const response = await fetch(localURL, {
-      redirect: "manual"
-    })
+    const response = await fetch(localURL)
 
-    const location = response.headers.get("location")
-    if (location && location !== "") {
-      response.headers.set(
-        "location",
-        new URL(new URL(location).pathname, localURL).href
-      )
+    if (response.url !== localURL.href) {
+      const location = new URL(new URL(response.url).pathname, url)
+      response.headers.set("location", location.href)
+      return new Response(response.body, {
+        status: 302,
+        headers: response.headers
+      })
+    } else {
+      return new Response(response.body, {
+        status: response.status,
+        headers: response.headers
+      })
     }
-
-    return new Response(response.body, {
-      status: response.status,
-      headers: response.headers
-    })
   } catch (error) {
     return new Response(error.toString(), {
       status: 500
