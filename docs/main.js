@@ -1,42 +1,86 @@
 // @noflow
 
-const setStatusMessage = message => {
-  document.querySelector(".status").textContent = message
-}
+class Lunet {
+  static new() {
+    return new Lunet()
+  }
+  constructor() {
+    this.subscribe()
+    this.activate()
+  }
+  async activate() {
+    try {
+      this.setStatusMessage(
+        "⚙️ Setting things up, to serve you even without interent."
+      )
 
-export const main = async () => {
-  try {
-    setStatusMessage(
-      "⚙️ Setting things up, to serve you even without interent."
-    )
-    // Register "access point" service worker that will serve all the p2p sites
-    // through `MessagePort` instances.
-    const serviceURL = new URL("/service.js", location.href)
-    // Uses the scope of the page it's served from.
-    const registration = await navigator.serviceWorker.register(serviceURL, {
-      scope: new URL(location).pathname
-    })
-    setStatusMessage("🎉 All set! Will be there for you any time")
-    // TODO: Work out a SW upgrade rollout strategy. For the proove of concept
-    // we just call update here to ease development.
+      const serviceURL = new URL("/service.js", location.href)
+      // Uses the scope of the page it's served from.
+      const registration = await navigator.serviceWorker.register(serviceURL, {
+        scope: "./"
+      })
+      this.setStatusMessage("⚙️ Activating local setup")
 
-    await navigator.serviceWorker.ready
-    await registration.update()
+      const serviceWorker = await navigator.serviceWorker.ready
 
-    await activate()
-  } catch (error) {
-    setStatusMessage(`☹️ Ooops, Something went wrong ${error}`)
+      this.setStatusMessage("🎉 All set!")
+
+      if (self.top === self) {
+        this.setStatusMessage("🎉 Loading dashboard!")
+        await this.activateDashboard()
+      }
+    } catch (error) {
+      this.setStatusMessage(`☹️ Ooops, Something went wrong ${error}`)
+    }
+  }
+  async activateDashboard() {
+    // Once SW is ready we load "control panel" UI by fetching it from SW.
+    const response = await fetch("/ipfs/webui")
+    const content = await response.text()
+    // Then we parse it as HTML and replacing current DOM tree with new one.
+    const parser = new DOMParser()
+    const { documentElement } = parser.parseFromString(content, "text/html")
+    history.pushState(null, "", response.url)
+    document.documentElement.replaceWith(documentElement)
+  }
+  subscribe() {
+    self.addEventListener("message", this)
+  }
+  addEventListener(event) {
+    switch (event.type) {
+      case "message": {
+        const {
+          data: { type, info },
+          origin,
+          ports
+        } = event
+
+        return this.receive({
+          type,
+          info,
+          origin,
+          ports
+        })
+      }
+    }
+  }
+  receive(message) {
+    switch (message.type) {
+      case "connect": {
+        return this.connect(message)
+      }
+    }
+  }
+  async connect({ type, info, origin, ports }) {
+    console.log("connection request", { type, info, origin, ports })
+    // TODO: Handle a case where lunet.link has not being visite and no
+    // sw is registered yet.
+    const { active } = await navigator.serviceWorker.ready
+    active.postMessage({ type, info, origin }, ports)
+  }
+  setStatusMessage(message) {
+    document.querySelector(".status").textContent = message
   }
 }
 
-const activate = async () => {
-  // Once SW is ready we load "control panel" UI by fetching it from SW.
-  const request = await fetch(location.href)
-  const content = await request.text()
-  // Then we parse it as HTML and replacing current DOM tree with new one.
-  const parser = new DOMParser()
-  const { documentElement } = parser.parseFromString(content, "text/html")
-  document.documentElement.replaceWith(documentElement)
-}
-
-main()
+self.main = Lunet.new()

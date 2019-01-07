@@ -89,12 +89,7 @@ class Connection {
 
 const initCache = async () => {
   const cache = await caches.open("companion")
-  return cache.addAll([
-    "./companion/bridge.html",
-    "./companion/bridge.js",
-    "./companion/embed.js",
-    "./companion/service.js"
-  ])
+  return cache.addAll(["./companion/embed.js", "./companion/service.js"])
 }
 
 const matchRoute = request => {

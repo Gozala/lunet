@@ -3,7 +3,7 @@
 // connect it to the access point service worker through a `MessagePort`.
 export const embed = async () => {
   try {
-    const baseURL = new URL("https://lunet.link/companion/")
+    const baseURL = new URL("https://lunet.link/")
     let registration = null
     // Register a service worker unless this document is controlled by one.
     if (!navigator.serviceWorker.controller) {
@@ -27,7 +27,7 @@ export const embed = async () => {
     // to a access point service worker. We need iframe that shares origin
     // with an access point SW so that it is able to send message to SW.
     const frame = document.createElement("iframe")
-    frame.src = new URL("bridge.html", baseURL)
+    frame.src = baseURL
     frame.style.display = "none"
     const loaded = onLoad(frame)
     document.head.appendChild(frame)
@@ -35,7 +35,7 @@ export const embed = async () => {
     // Once iframe is loaded we create a message channel.
     var { port1, port2 } = new MessageChannel()
     // Forward one port to the iframe which will forward it to access point SW.
-    frame.contentWindow.postMessage("connect", baseURL, [port1])
+    frame.contentWindow.postMessage({ type: "connect" }, baseURL, [port1])
     // Once companion SW is ready we send it the other message port.
     const ready = await navigator.serviceWorker.ready
     setStatusMessage("⚙️ Bridging with lunet.link.")
