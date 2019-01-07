@@ -26,6 +26,7 @@ class Lunet {
       this.setStatusMessage("🎉 All set!")
 
       if (self.top === self) {
+        console.log(navigator.serviceWorker.controller)
         this.setStatusMessage("🎉 Loading dashboard!")
         await this.activateDashboard()
       }
