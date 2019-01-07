@@ -35,7 +35,7 @@ class Lunet {
   }
   async activateDashboard() {
     // Once SW is ready we load "control panel" UI by fetching it from SW.
-    const response = await fetch("/ipfs/webui")
+    const response = await fetch("/webui")
     const content = await response.text()
     // Then we parse it as HTML and replacing current DOM tree with new one.
     const parser = new DOMParser()
