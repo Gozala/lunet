@@ -26,6 +26,7 @@ class Lunet {
       this.setStatusMessage("🎉 All set!")
 
       if (self.top === self) {
+        await this.oncontrolled()
         console.log(navigator.serviceWorker.controller)
         this.setStatusMessage("🎉 Loading dashboard!")
         await this.activateDashboard()
@@ -33,6 +34,13 @@ class Lunet {
     } catch (error) {
       this.setStatusMessage(`☹️ Ooops, Something went wrong ${error}`)
     }
+  }
+  oncontrolled() {
+    return new Promise(resolve => {
+      navigator.serviceWorker.addEventListener("controllerchange", resolve, {
+        once: true
+      })
+    })
   }
   async activateDashboard() {
     // Once SW is ready we load "control panel" UI by fetching it from SW.
