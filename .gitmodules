@@ -1,0 +1,3 @@
+[submodule "examples/lunetarium"]
+	path = examples/lunetarium
+	url = git@github.com:Gozala/lunetarium.git

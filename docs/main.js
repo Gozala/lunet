@@ -76,7 +76,7 @@ class Lunet {
   subscribe() {
     self.addEventListener("message", this)
   }
-  addEventListener(event) {
+  handleEvent(event) {
     switch (event.type) {
       case "message": {
         const {
