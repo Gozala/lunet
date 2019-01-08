@@ -36,11 +36,15 @@ class Lunet {
     }
   }
   oncontrolled() {
-    return new Promise(resolve => {
-      navigator.serviceWorker.addEventListener("controllerchange", resolve, {
-        once: true
+    if (navigator.serviceWorker.controller) {
+      return navigator.serviceWorker.controller
+    } else {
+      return new Promise(resolve => {
+        navigator.serviceWorker.addEventListener("controllerchange", resolve, {
+          once: true
+        })
       })
-    })
+    }
   }
   async activateDashboard() {
     // Once SW is ready we load "control panel" UI by fetching it from SW.
