@@ -8,11 +8,7 @@ const baseURI = new URL("https://lunet.link/")
 // network.
 
 self.addEventListener("install", function(event) {
-  console.log(`Companion service worker is installed for ${self.origin}`)
-  // We cache all the companion assets because occasionally we will need to
-  // reconnect to the "access point" SW and if we won't be able to do so
-  // while offline (as access point doesn't serve across origins).
-  event.waitUntil(initCache())
+  event.waitUntil(self.skipWaiting())
 })
 
 self.addEventListener("activate", function(event) {
@@ -124,11 +120,12 @@ class Connection {
   async request(request) {
     const id = ++this.id
     const buffer = await request.arrayBuffer()
+    const url = request.url.replace(self.scope, baseURI.href)
     this.port.postMessage(
       {
         id,
         buffer,
-        url: request.url,
+        url,
         cache: request.cache,
         destination: request.destination,
         headers: [...request.headers.entries()],
@@ -151,15 +148,20 @@ class Connection {
   }
 }
 
-const matchRoute = async request => {
+const matchRoute = request => {
   const url = new URL(request.url)
-  // If matches companion route serve it from cache
-  if (url.origin === baseURI.origin) {
-    return companionRoute(request)
+  switch (url.origin) {
+    case baseURI.origin:
+      return lunetRoute(request)
+    case self.origin:
+      return lunetRoute(request)
+    default:
+      return foreignFetch(request.url)
   }
-  // If connected to access point and connection is still alive forward
-  // underlying request.
-  else if (connection && connection.isAlive()) {
+}
+
+const lunetRoute = async request => {
+  if (connection && connection.isAlive()) {
     return await connection.request(request)
   }
   // If no live connection is found to access point we load a page that would
@@ -170,27 +172,12 @@ const matchRoute = async request => {
   // If it's not a navigation request than it's coming from a loaded document
   // that would be in `self.clients` so we probably well need to exploit one of
   // such document to reconnect and put this request in the queue until than.
-  else if (url.origin === self.origin) {
-    return await connectRoute(request)
-  }
-  // Otherwise it is fetch to some other foreign origin in which case we
-  // just serve it through fetch.
   else {
-    return foreignFetch(request.url)
+    return await connectRoute(request)
   }
 }
 
 const foreignFetch = url => fetch(url, { mode: "no-cors" })
-
-const companionRoute = async request => {
-  const cache = await caches.open("companion")
-  const response = await cache.match(request)
-  if (response) {
-    return response
-  } else {
-    return notFound(request)
-  }
-}
 
 // Here we generate a basic page that goes through embedding flow to create
 // connection with an access-point SW.
@@ -227,17 +214,4 @@ const notFound = async request => {
       "content-type": "text/html"
     }
   })
-}
-
-const initCache = async () => {
-  console.log(`Init companion cache for ${self.origin}`)
-  const cache = await caches.open("companion")
-  const urls = [
-    new URL("./", baseURI),
-    new URL("./main.js", baseURI),
-    new URL("./companion/embed.js", baseURI),
-    new URL("./companion/service.js", baseURI)
-  ]
-  console.log(`Companion "${self.origin}" is caching`, urls)
-  return cache.addAll(urls)
 }
