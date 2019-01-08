@@ -89,7 +89,12 @@ class Connection {
 
 const initCache = async () => {
   const cache = await caches.open("companion")
-  return cache.addAll(["./companion/embed.js", "./companion/service.js"])
+  return cache.addAll([
+    "./",
+    "./main.js",
+    "./companion/embed.js",
+    "./companion/service.js"
+  ])
 }
 
 const matchRoute = request => {
@@ -97,11 +102,9 @@ const matchRoute = request => {
   const { pathname, hostname } = url
   const [base, ...entries] = pathname.slice(1).split("/")
   switch (base) {
-    // Main will serve a control panel of some sorts.
-    case "": {
-      return mainRoute(request)
-    }
     // Serves static assets for the embedders
+    case "":
+    case "main.js":
     case "companion": {
       return companionRoute(request)
     }

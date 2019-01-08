@@ -46,22 +46,8 @@ class Lunet {
     // Once SW is ready we load "control panel" UI by fetching it from SW.
     const response = await fetch("/webui")
     const content = await response.text()
-    // Then we parse it as HTML and replacing current DOM tree with new one.
-    const parser = new DOMParser()
-    const { head, body } = parser.parseFromString(content, "text/html")
     history.pushState(null, "", response.url)
-
-    if (head) {
-      document.head.replaceWith(head)
-    } else {
-      document.head.remove()
-    }
-
-    if (body) {
-      document.body.replaceWith(body)
-    } else {
-      document.body.remove()
-    }
+    document.write(content)
   }
   subscribe() {
     self.addEventListener("message", this)

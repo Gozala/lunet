@@ -233,8 +233,8 @@ const initCache = async () => {
   console.log(`Init companion cache for ${self.origin}`)
   const cache = await caches.open("companion")
   const urls = [
-    new URL("./companion/bridge.html", baseURI),
-    new URL("./companion/bridge.js", baseURI),
+    new URL("./", baseURI),
+    new URL("./main.js", baseURI),
     new URL("./companion/embed.js", baseURI),
     new URL("./companion/service.js", baseURI)
   ]
