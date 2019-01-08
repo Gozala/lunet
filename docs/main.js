@@ -50,7 +50,7 @@ class Lunet {
     // Once SW is ready we load "control panel" UI by fetching it from SW.
     const response = await fetch("/webui")
     const content = await response.text()
-    history.pushState(null, "", response.url)
+    history.replaceState(null, "", response.url)
     document.write(content)
   }
   subscribe() {
