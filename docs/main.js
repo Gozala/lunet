@@ -52,11 +52,26 @@ class Lunet {
     const content = await response.text()
 
     const parser = new DOMParser()
-    const { documentElement } = parser.parseFromString(content, "text/html")
-    history.pushState(null, "", response.url)
+    const { documentElement } = parser.parseFromString(
+      content,
+      document.contentType
+    )
+    const root = document.adoptNode(documentElement)
+    const scripts = [...root.querySelectorAll("script")]
+    for (const source of scripts) {
+      const script = document.createElement("script")
+      for (const { name, value, namespaceURI } of source.attributes) {
+        if (namespaceURI) {
+          script.setAttributeNS(namespaceURI, name, value)
+        } else {
+          script.setAttribute(name, value)
+        }
+      }
+      source.replaceWith(script)
+    }
 
-    window.response = response
-    // document.documentElement.replaceWith(document.adoptNode(documentElement))
+    history.pushState(null, "", response.url)
+    document.documentElement.replaceWith(root)
   }
   subscribe() {
     self.addEventListener("message", this)
