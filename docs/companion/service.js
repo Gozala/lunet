@@ -120,7 +120,7 @@ class Connection {
   async request(request) {
     const id = ++this.id
     const buffer = await request.arrayBuffer()
-    const url = request.url.replace(self.scope, baseURI.href)
+    const url = request.url.replace(self.registration.scope, baseURI.href)
     this.port.postMessage(
       {
         id,
