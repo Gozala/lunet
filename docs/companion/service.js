@@ -8,7 +8,11 @@ const baseURI = new URL("https://lunet.link/")
 // network.
 
 self.addEventListener("install", function(event) {
-  event.waitUntil(self.skipWaiting())
+  console.log(`Companion service worker is installed for ${self.origin}`)
+  // We cache all the companion assets because occasionally we will need to
+  // reconnect to the "access point" SW and if we won't be able to do so
+  // while offline (as access point doesn't serve across origins).
+  event.waitUntil(initCache())
 })
 
 self.addEventListener("activate", function(event) {
@@ -154,13 +158,13 @@ const matchRoute = request => {
     case baseURI.origin:
       return lunetRoute(request)
     case self.origin:
-      return lunetRoute(request)
+      return serviceFetch(request)
     default:
       return foreignFetch(request.url)
   }
 }
 
-const lunetRoute = async request => {
+const serviceFetch = async request => {
   if (connection && connection.isAlive()) {
     return await connection.request(request)
   }
@@ -174,6 +178,16 @@ const lunetRoute = async request => {
   // such document to reconnect and put this request in the queue until than.
   else {
     return await connectRoute(request)
+  }
+}
+
+const lunetRoute = async request => {
+  const cache = await caches.open("lunet.link")
+  const response = await cache.match(request)
+  if (response) {
+    return response
+  } else {
+    return foreignFetch(request.url)
   }
 }
 
@@ -214,4 +228,16 @@ const notFound = async request => {
       "content-type": "text/html"
     }
   })
+}
+
+const initCache = async () => {
+  console.log(`Init lunet cache ${self.registration.source}`)
+  const cache = await caches.open("lunet.link")
+  const urls = [
+    new URL("./", baseURI),
+    new URL("./companion/embed.js", baseURI),
+    new URL("./companion/service.js", baseURI)
+  ]
+  console.log(`Companion "${self.registration.source}" is caching`, urls)
+  return cache.addAll(urls)
 }
