@@ -50,8 +50,14 @@ class Lunet {
     // Once SW is ready we load "control panel" UI by fetching it from SW.
     const response = await fetch("/webui")
     const content = await response.text()
-    history.replaceState(null, "", response.url)
-    document.write(content)
+
+    const parser = new DOMParser()
+    const { documentElement } = parser.parseFromString(content, "text/html")
+    history.pushState(null, "", response.url)
+
+    document.documentElement.replaceWith(documentElement)
+    const scripts = [...document.body.querySelectorAll("script")]
+    scripts.forEach(script => script.replaceWith(script))
   }
   subscribe() {
     self.addEventListener("message", this)
