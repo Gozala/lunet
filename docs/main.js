@@ -55,9 +55,8 @@ class Lunet {
     const { documentElement } = parser.parseFromString(content, "text/html")
     history.pushState(null, "", response.url)
 
-    document.documentElement.replaceWith(documentElement)
-    const scripts = [...document.body.querySelectorAll("script")]
-    scripts.forEach(script => script.replaceWith(script))
+    window.response = response
+    // document.documentElement.replaceWith(document.adoptNode(documentElement))
   }
   subscribe() {
     self.addEventListener("message", this)
