@@ -55,7 +55,6 @@ const request = async request => {
       "*"
 
   const endpoint = matchEndpoint(url)
-  console.log("request.url", endpoint.href)
 
   try {
     const body =
