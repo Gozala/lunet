@@ -71,7 +71,13 @@ class Connection {
       request
     )
 
-    const response = await satelliteRoute(request)
+    const response = await satelliteRoute(
+      new Request(request.url, {
+        headers: request.headers,
+        method: request.method,
+        body: request.body
+      })
+    )
     const buffer = await response.arrayBuffer()
     this.port.postMessage(
       {
@@ -193,11 +199,12 @@ const satelliteRoute = async request => {
 
     const requestHeaders = new Headers(request.headers)
     requestHeaders.delete("upgrade-insecure-requests")
+    requestHeaders.delete("origin")
 
     const response = await fetch(endpointURL, {
       method: request.method,
-      headers: requestHeaders
-      //   body: request.body
+      headers: requestHeaders,
+      body: await request.arrayBuffer()
     })
     const headers = new Headers(response.headers.entries())
 
