@@ -74,7 +74,9 @@ export const embed = async () => {
     for (const node of [...document.head.childNodes]) {
       switch (node) {
         case meta:
-        case frame:
+        case frame: {
+          break
+        }
         default: {
           if (node.localName !== "script") {
             node.remove()
