@@ -80,7 +80,7 @@ export const embed = async () => {
         }
       }
     }
-    document.head.append(document.adoptNode(root.head).childNodes)
+    document.head.append(...document.adoptNode(root.head).childNodes)
     document.body.replaceWith(document.adoptNode(root.body))
   } catch (error) {
     setStatusMessage(`☹️ Ooops, Something went wrong`)
