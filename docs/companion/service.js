@@ -1,6 +1,9 @@
 // @flow strict
 
-const baseURI = new URL("https://lunet.link/")
+const baseURI = new URL(
+  new URL(location.href).searchParams.get("mount") || "",
+  "https://lunet.link/"
+)
 
 // Companion service is used p2p sites / applications. Site uses embedded
 // `iframe` with `companion/bridge.html` to connect this SW with an
@@ -22,7 +25,10 @@ self.addEventListener("activate", function(event) {
 })
 
 self.addEventListener("fetch", function(event) {
-  console.log(`Companion at ${self.origin} got fetch request`, event)
+  console.log(
+    `Companion at ${self.registration.scope} got fetch request`,
+    event
+  )
   const { request } = event
   event.respondWith(matchRoute(request))
 })
@@ -187,7 +193,7 @@ const lunetRoute = async request => {
   if (response) {
     return response
   } else {
-    return foreignFetch(request.url)
+    return serviceFetch(request)
   }
 }
 
@@ -200,6 +206,7 @@ const connectRoute = async request => {
     `<html>
   <head>
     <meta charset="utf-8" />
+    <meta name="mount" content="${baseURI.pathname}" />
     <title>P2P Site</title>
     <script
       type="module"
@@ -234,9 +241,9 @@ const initCache = async () => {
   console.log(`Init lunet cache ${self.registration.source}`)
   const cache = await caches.open("lunet.link")
   const urls = [
-    new URL("./", baseURI),
-    new URL("./companion/embed.js", baseURI),
-    new URL("./companion/service.js", baseURI)
+    new URL("/", baseURI),
+    new URL("/companion/embed.js", baseURI),
+    new URL("/companion/service.js", baseURI)
   ]
   console.log(`Companion "${self.registration.source}" is caching`, urls)
   return cache.addAll(urls)

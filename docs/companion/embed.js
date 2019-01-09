@@ -4,6 +4,9 @@
 export const embed = async () => {
   try {
     const baseURL = new URL("https://lunet.link/")
+    const meta = document.querySelector("meta[name=mount]")
+    const mount = meta ? meta.content : ""
+
     let registration = null
     // Register a service worker unless this document is controlled by one.
     if (!navigator.serviceWorker.controller) {
@@ -11,9 +14,9 @@ export const embed = async () => {
         "⚙️ Setting application to serve you even without interent."
       )
       registration = await navigator.serviceWorker.register(
-        "./lunet.link.companion.service.js",
+        `./lunet.js?mount=${mount}`,
         {
-          scope: new URL(location).pathname
+          scope: "./"
         }
       )
     }
@@ -49,9 +52,23 @@ export const embed = async () => {
     // URL and swap the document content with it.
     const request = await fetch(location.href)
     const content = await request.text()
-    const parser = new DOMParser()
-    const { documentElement } = parser.parseFromString(content, "text/html")
-    document.documentElement.replaceWith(documentElement)
+    const { documentElement } = parser.parseFromString(
+      content,
+      document.contentType
+    )
+    const root = document.adoptNode(documentElement)
+    const scripts = [...root.querySelectorAll("script")]
+    for (const source of scripts) {
+      const script = document.createElement("script")
+      for (const { name, value, namespaceURI } of source.attributes) {
+        if (namespaceURI) {
+          script.setAttributeNS(namespaceURI, name, value)
+        } else {
+          script.setAttribute(name, value)
+        }
+      }
+      source.replaceWith(script)
+    }
   } catch (error) {
     setStatusMessage(`☹️ Ooops, Something went wrong`)
     console.error({ message: error.message, stack: error.stack })
