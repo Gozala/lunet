@@ -203,6 +203,7 @@ const satelliteRoute = async request => {
     requestHeaders.delete("dnt")
     requestHeaders.delete("accept")
     requestHeaders.delete("user-agent")
+    requestHeaders.delete("x-requested-with")
 
     const body =
       request.method === "GET"
