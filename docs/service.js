@@ -122,8 +122,11 @@ const matchRoute = request => {
     case "companion": {
       return companionRoute(request)
     }
-    case "keep-alive": {
-      return keepAlive(request)
+    case "keep-alive/ping": {
+      return keepAlivePing(request)
+    }
+    case "keep-alive/pong": {
+      return keepAlivePong(request)
     }
     // Disable for now since GH pages do not handler * subdomains.
     // For IPFS / IPNS routes we will want to perfrom redirects to move CID into
@@ -161,31 +164,14 @@ const companionRoute = async request => {
   }
 }
 
-const keepAlive = async request => {
-  let isAlive = true
-  const body = new ReadableStream({
-    async start(controller) {
-      while (isAlive) {
-        await sleep(1000)
-        controller.enqueue(`data: ${Date.now()}\n\n`)
-      }
-      controller.close()
-    },
-    pull(controller) {
-      // We don't really need a pull in this example
-    },
-    cancel(controller) {
-      isAlive = false
-    }
-  })
+const keepAlivePing = async request => {
+  await sleep(60 * 1000)
+  return new Response.redirect("/keep-alive/ping")
+}
 
-  return new Response(body, {
-    status: 200,
-    headers: {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache"
-    }
-  })
+const keepAlivePong = async request => {
+  await sleep(60 * 1000)
+  return new Response.redirect("/keep-alive/pong")
 }
 
 // Non existing documents under `companion` route.
