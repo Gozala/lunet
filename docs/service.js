@@ -63,7 +63,9 @@ class Connection {
       this.port.postMessage({ type: "alive", time: Date.now() })
     }
   }
-  async receive(request /*:{id:string, url:string}*/) {
+  async receive(
+    request /*:{id:string, url:string, headers:Headers, method:string, body:ArrayBuffer}*/
+  ) {
     console.log(
       `Access point received request from "${this.origin}" connection`,
       request
@@ -189,6 +191,11 @@ const satelliteRoute = async request => {
       }`
     )
     const response = await fetch(endpointURL)
+    // const response = await fetch(endpointURL, {
+    //   method: request.method,
+    //   headers: request.headers,
+    //   body: request.body
+    // })
     const headers = new Headers(response.headers.entries())
 
     if (response.url !== endpointURL.href) {
