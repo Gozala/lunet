@@ -190,12 +190,11 @@ const satelliteRoute = async request => {
         endpointURL.href
       }`
     )
-    const response = await fetch(endpointURL)
-    // const response = await fetch(endpointURL, {
-    //   method: request.method,
-    //   headers: request.headers,
-    //   body: request.body
-    // })
+    const response = await fetch(endpointURL, {
+      method: request.method,
+      headers: request.headers
+      //   body: request.body
+    })
     const headers = new Headers(response.headers.entries())
 
     if (response.url !== endpointURL.href) {
