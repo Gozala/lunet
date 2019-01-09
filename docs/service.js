@@ -190,9 +190,13 @@ const satelliteRoute = async request => {
         endpointURL.href
       }`
     )
+
+    const requestHeaders = new Headers(request.headers)
+    requestHeaders.delete("origin")
+
     const response = await fetch(endpointURL, {
       method: request.method,
-      headers: request.headers
+      headers: requestHeaders
       //   body: request.body
     })
     const headers = new Headers(response.headers.entries())
