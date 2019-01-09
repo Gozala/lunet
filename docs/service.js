@@ -122,6 +122,9 @@ const matchRoute = request => {
     case "companion": {
       return companionRoute(request)
     }
+    case "keep-alive": {
+      return keepAlive(request)
+    }
     // Disable for now since GH pages do not handler * subdomains.
     // For IPFS / IPNS routes we will want to perfrom redirects to move CID into
     // origin (for isolation) and serve data from there.
@@ -156,6 +159,33 @@ const companionRoute = async request => {
   } else {
     return notFound(request)
   }
+}
+
+const keepAlive = async request => {
+  let isAlive = true
+  const body = new ReadableStream({
+    async start(controller) {
+      while (isAlive) {
+        await sleep(1000)
+        controller.enqueue(`data: ${Date.now()}\n\n`)
+      }
+      controller.close()
+    },
+    pull(controller) {
+      // We don't really need a pull in this example
+    },
+    cancel(controller) {
+      isAlive = false
+    }
+  })
+
+  return new Response(body, {
+    status: 200,
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache"
+    }
+  })
 }
 
 // Non existing documents under `companion` route.

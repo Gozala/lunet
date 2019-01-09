@@ -107,6 +107,7 @@ class Lunet {
     // sw is registered yet.
     const { active } = await navigator.serviceWorker.ready
     active.postMessage({ type, info, origin }, ports)
+    const keepAlive = new EventSource("/keep-alive")
   }
   setStatusMessage(message) {
     document.querySelector(".status").textContent = message
