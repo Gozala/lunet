@@ -1,7 +1,7 @@
 // @flow strict
 
 import ENV from "../universal/env.js"
-import { server, Response, Headers } from "../universal/http.js"
+import { server, Response, Request, Headers } from "../universal/http.js"
 import { File } from "../universal/file.js"
 import * as WS from "../universal/ws.js"
 import { baseURL } from "../../package.js"
@@ -56,10 +56,23 @@ const request = async request => {
 
   const endpoint = matchEndpoint(url)
   console.log("request.url", endpoint.href)
+
   try {
-    const apiResponse = await fetch(endpoint.href, {
-      redirect: "manual"
+    const body =
+      request.method === "HEAD"
+        ? null
+        : request.method === "GET"
+        ? null
+        : await request.arrayBuffer()
+
+    const payload = new Request(endpoint.href, {
+      redirect: "manual",
+      method: request.method,
+      headers: request.headers,
+      body: body
     })
+
+    const apiResponse = await fetch(payload)
 
     const headers = {
       ...fromEntries(apiResponse.headers.entries()),
@@ -71,8 +84,6 @@ const request = async request => {
       const location = updateHost(new URL(headers.location), url)
       headers.location = location.href
     }
-
-    console.log("response.headers", headers)
 
     const response = new Response(apiResponse.body, {
       status: apiResponse.status,
@@ -94,7 +105,8 @@ export default async (port /*:number*/) => {
   })
 
   serve(server({ key, certificate }).listen(port))
+  serve(server().listen(port + 1))
   const host = server({ key, certificate })
-  host.server.listen(port + 1)
+  host.server.listen(port + 2)
   ws(WS.listen({ server: host }))
 }

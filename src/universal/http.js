@@ -6,11 +6,12 @@ const {
   WritableStream,
   TransformStream
 } = require("@mattiasbuelens/web-streams-polyfill")
-const { Headers, Request, Response } = require("node-fetch")
+
 const { createServer: createHTTPServer } = require("http")
 const { createServer: createHTTPSServer } = require("https")
+const streamToBuffer = require("fast-stream-to-buffer")
 import { fromEntries } from "./Object.js"
-
+import { Headers, Request, Response } from "./fetch.js"
 /*::
 import * as HTTP from "http"
 import * as HTTPS from "https"
@@ -22,6 +23,11 @@ export type TLSOptions = {
 */
 
 class Connection extends Request {
+  /*::
+  data:ReadableStream
+  response:HTTP.ServerResponse
+  rawRequest:HTTP.IncomingMessage
+  */
   constructor(
     request /*:HTTP.IncomingMessage*/,
     response /*:HTTP.ServerResponse*/
@@ -30,22 +36,35 @@ class Connection extends Request {
     const protocol = socket.encrypted ? "https" : "http"
     const url = `${protocol}://${request.headers.host}${request.url}`
     super(url, {
-      headers: new Headers(request.headers),
+      headers: new Headers({ ...request.headers, ...request.trailers }),
       method: request.method
     })
     this.response = response
-    this.data = toWebReadableStream(request)
+    this.rawRequest = request
   }
   get body() {
-    return this.data
+    return toWebReadableStream(this.rawRequest)
+  }
+  arrayBuffer() /*:Promise<ArrayBuffer>*/ {
+    return new Promise((resolve, reject) => {
+      streamToBuffer(this.rawRequest, (error, buffer) => {
+        if (error) reject(error)
+        else resolve(buffer)
+      })
+    })
   }
   async respond(response /*:Response*/) {
     this.response.writeHead(
       response.status,
       fromEntries(response.headers.entries())
     )
-    for await (const chunk of response.body) {
-      this.response.write(chunk)
+
+    const { body } = response
+    if (body) {
+      const $body /*:any*/ = body
+      for await (const chunk of $body) {
+        this.response.write(chunk)
+      }
     }
     this.response.end()
   }

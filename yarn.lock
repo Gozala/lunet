@@ -1656,6 +1656,13 @@ fast-future@~1.0.2:
   resolved "https://registry.yarnpkg.com/fast-future/-/fast-future-1.0.2.tgz#8435a9aaa02d79248d17d704e76259301d99280a"
   integrity sha1-hDWpqqAteSSNF9cE52JZMB2ZKAo=
 
+fast-stream-to-buffer@1.0.0:
+  version "1.0.0"
+  resolved "https://registry.yarnpkg.com/fast-stream-to-buffer/-/fast-stream-to-buffer-1.0.0.tgz#793340cc753e7ec9c7fb6d57a53a0b911cb0f588"
+  integrity sha512-bI/544WUQlD2iXBibQbOMSmG07Hay7YrpXlKaeGTPT7H7pC0eitt3usak5vUwEvCGK/O7rUAM3iyQValGU22TQ==
+  dependencies:
+    end-of-stream "^1.4.1"
+
 file-type@^10.2.0:
   version "10.7.0"
   resolved "https://registry.yarnpkg.com/file-type/-/file-type-10.7.0.tgz#b6a9bf24f1d14ba514ab9087c7864d4da4a7ce76"
