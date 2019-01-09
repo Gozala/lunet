@@ -53,11 +53,8 @@ export const embed = async () => {
     const request = await fetch(location.href)
     const content = await request.text()
     const parser = new DOMParser()
-    const { documentElement } = parser.parseFromString(
-      content,
-      document.contentType
-    )
-    const root = document.adoptNode(documentElement)
+    const root = parser.parseFromString(content, document.contentType)
+
     const scripts = [...root.querySelectorAll("script")]
     for (const source of scripts) {
       const script = document.createElement("script")
@@ -70,7 +67,20 @@ export const embed = async () => {
       }
       source.replaceWith(script)
     }
-    document.documentElement.replaceWith(root)
+
+    for (const node of [...document.head.childNodes]) {
+      switch (node) {
+        case meta:
+        case frame:
+        default: {
+          if (node.localName !== "script") {
+            node.removeChild()
+          }
+        }
+      }
+    }
+    document.head.append(document.adoptNode(root.head).childNodes)
+    document.body.replaceWith(document.adoptNode(root.body))
   } catch (error) {
     setStatusMessage(`☹️ Ooops, Something went wrong`)
     console.error({ message: error.message, stack: error.stack })
