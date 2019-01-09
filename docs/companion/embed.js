@@ -70,6 +70,7 @@ export const embed = async () => {
       }
       source.replaceWith(script)
     }
+    document.documentElement.replaceWith(root)
   } catch (error) {
     setStatusMessage(`☹️ Ooops, Something went wrong`)
     console.error({ message: error.message, stack: error.stack })
