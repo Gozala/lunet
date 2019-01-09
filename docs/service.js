@@ -192,7 +192,7 @@ const satelliteRoute = async request => {
     )
 
     const requestHeaders = new Headers(request.headers)
-    requestHeaders.delete("origin")
+    requestHeaders.delete("upgrade-insecure-requests")
 
     const response = await fetch(endpointURL, {
       method: request.method,
