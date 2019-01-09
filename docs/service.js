@@ -204,10 +204,17 @@ const satelliteRoute = async request => {
     requestHeaders.delete("accept")
     requestHeaders.delete("user-agent")
 
+    const body =
+      request.method === "GET"
+        ? null
+        : request.method === "HEAD"
+        ? null
+        : await request.arrayBuffer()
+
     const response = await fetch(endpointURL, {
       method: request.method,
       headers: requestHeaders,
-      body: await request.arrayBuffer()
+      body
     })
     const headers = new Headers(response.headers.entries())
 
