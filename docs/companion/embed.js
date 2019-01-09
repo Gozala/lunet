@@ -75,7 +75,7 @@ export const embed = async () => {
         case frame:
         default: {
           if (node.localName !== "script") {
-            node.removeChild()
+            node.remove()
           }
         }
       }
