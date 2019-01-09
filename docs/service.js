@@ -164,7 +164,7 @@ const companionRoute = async request => {
 const keepAlive = async inn => {
   await sleep(60 * 1000)
   const out = inn === "ping" ? "pong" : "ping"
-  return new Response.redirect(`/keep-alive/${out}`)
+  return Response.redirect(`/keep-alive/${out}`)
 }
 
 // Non existing documents under `companion` route.
