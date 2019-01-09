@@ -55,8 +55,9 @@ export const embed = async () => {
     const parser = new DOMParser()
     const root = parser.parseFromString(content, document.contentType)
 
-    const scripts = [...root.querySelectorAll("script")]
-    for (const source of scripts) {
+    // collect scripts scripts
+    const scripts = []
+    for (const source of [...root.querySelectorAll("script")]) {
       const script = document.createElement("script")
       for (const { name, value, namespaceURI } of source.attributes) {
         if (namespaceURI) {
@@ -65,10 +66,11 @@ export const embed = async () => {
           script.setAttribute(name, value)
         }
       }
-      script.async = false
-      source.replaceWith(script)
+      scripts.push(script)
+      source.remove()
     }
 
+    // Remove old nodes
     for (const node of [...document.head.childNodes]) {
       switch (node) {
         case meta:
@@ -82,6 +84,11 @@ export const embed = async () => {
     }
     document.head.append(...document.adoptNode(root.head).childNodes)
     document.body.replaceWith(document.adoptNode(root.body))
+
+    for (const script of scripts) {
+      document.head.append(script)
+      await onLoad(script)
+    }
   } catch (error) {
     setStatusMessage(`☹️ Ooops, Something went wrong`)
     console.error({ message: error.message, stack: error.stack })
