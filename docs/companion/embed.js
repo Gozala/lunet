@@ -65,6 +65,7 @@ export const embed = async () => {
           script.setAttribute(name, value)
         }
       }
+      script.async = false
       source.replaceWith(script)
     }
 
