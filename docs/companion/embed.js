@@ -52,6 +52,7 @@ export const embed = async () => {
     // URL and swap the document content with it.
     const request = await fetch(location.href)
     const content = await request.text()
+    const parser = new DOMParser()
     const { documentElement } = parser.parseFromString(
       content,
       document.contentType
