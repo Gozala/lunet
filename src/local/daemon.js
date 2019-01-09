@@ -30,9 +30,21 @@ const serve = async connections => {
 }
 
 const REST_SERVICE_URL = new URL("http://127.0.0.1:5001")
+const GATEWAY_URL = new URL("http://127.0.0.1:8080")
 
 const updateHost = (url, hostURL) =>
   new URL(`${url.pathname}${url.search}`, hostURL)
+
+const matchEndpoint = url => {
+  const [_, base] = url.pathname.split("/")
+  switch (base) {
+    case "ipfs":
+    case "ipns":
+      return updateHost(url, GATEWAY_URL)
+    default:
+      return updateHost(url, REST_SERVICE_URL)
+  }
+}
 
 const request = async request => {
   const url = new URL(request.url)
@@ -42,7 +54,7 @@ const request = async request => {
     : // : "https://lunet.link"
       "*"
 
-  const endpoint = updateHost(url, REST_SERVICE_URL)
+  const endpoint = matchEndpoint(url)
   console.log("request.url", endpoint.href)
   try {
     const apiResponse = await fetch(endpoint.href, {
