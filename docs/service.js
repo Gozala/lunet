@@ -71,11 +71,17 @@ class Connection {
       request
     )
 
+    const body =
+      request.method === "GET"
+        ? null
+        : request.method === "HEAD"
+        ? null
+        : request.body
     const response = await satelliteRoute(
       new Request(request.url, {
         headers: request.headers,
         method: request.method,
-        body: request.body
+        body: body
       })
     )
     const buffer = await response.arrayBuffer()
