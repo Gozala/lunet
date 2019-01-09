@@ -49,7 +49,7 @@ let connection = null
 type EncodedResponse = {
   type:"response";
   id:number;
-  buffer:ArrayBuffer;
+  body:ArrayBuffer;
   url:string;
   status:number;
   statusText:string;
@@ -134,8 +134,8 @@ class Connection {
     this.port.postMessage(
       {
         id,
-        buffer,
         url,
+        body: buffer,
         cache: request.cache,
         destination: request.destination,
         headers: [...request.headers.entries()],
@@ -150,7 +150,7 @@ class Connection {
     )
 
     const response = await this.wait(id)
-    return new Response(response.buffer, {
+    return new Response(response.body, {
       status: response.status,
       statusText: response.statusText,
       headers: new Headers(response.headers)

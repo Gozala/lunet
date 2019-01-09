@@ -88,7 +88,7 @@ class Connection {
         status: response.status,
         statusText: response.statusText,
         headers: [...response.headers.entries()],
-        buffer
+        body: buffer
       },
       [buffer]
     )
