@@ -95,7 +95,8 @@ export const connect = async (
 }
 
 const activate = async (client /*:LunetClient*/, event /*:any*/) => {
-  const response = await fetch(client.mount)
+  const document = client.ownerDocument
+  const response = await fetch(document.location.href)
   const content = await response.text()
 
   const parser = new DOMParser()

@@ -109,6 +109,7 @@ export const relay = async (host /*:LunetHost*/, event /*:Data.Request*/) => {
 }
 
 const activate = async host => {
+  const document = host.ownerDocument
   // Once SW is ready we load "control panel" UI by fetching it from SW.
   const response = await fetch(host.mount)
   const content = await response.text()
