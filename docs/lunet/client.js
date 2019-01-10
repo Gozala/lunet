@@ -90,7 +90,40 @@ export const connect = async (
   setStatus(client, "🛰")
 
   if (!client.hasAttribute("passive")) {
-    client.ownerDocument.location.reload()
+    activate(client)
+  }
+}
+
+const activate = async (client /*:LunetClient*/, event /*:any*/) => {
+  const response = await fetch(client.mount)
+  const content = await response.text()
+
+  const parser = new DOMParser()
+  const { documentElement } = parser.parseFromString(content, "text/html")
+
+  const root = documentElement
+    ? document.adoptNode(documentElement)
+    : document.createElement("html")
+
+  const scripts = [...root.querySelectorAll("script")]
+  for (const source of scripts) {
+    const script = document.createElement("script")
+    for (const { name, value, namespaceURI } of source.attributes) {
+      if (namespaceURI) {
+        script.setAttributeNS(namespaceURI, name, value)
+      } else {
+        script.setAttribute(name, value)
+      }
+    }
+    source.replaceWith(script)
+  }
+
+  history.pushState(null, "", response.url)
+
+  if (document.documentElement) {
+    document.documentElement.replaceWith(root)
+  } else {
+    document.appendChild(root)
   }
 }
 
