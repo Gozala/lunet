@@ -147,7 +147,7 @@ const encodeRequest = async (
 ) /*:Promise<Data.RequestData>*/ => {
   const body = await encodeBody(request)
   const url = request.url.startsWith(self.registration.scope)
-    ? `${mountURL.href}${request.url.substr(self.registration.scope)}`
+    ? `${mountURL.href}${request.url.substr(self.registration.scope.length)}`
     : request.url
   const $request /*:Object*/ = request
   const headers /*:any*/ = [...request.headers.entries()]
