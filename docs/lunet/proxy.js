@@ -246,13 +246,11 @@ const findClient = async (id /*:string*/) /*:Promise<?WindowClient>*/ => {
 // We choose a best match by following priority:
 // - focuse
 // - visible
-// - hidden
 // Working assumbtion is that that order reflects the likelyhood of client not
 // being throttled and there for can do the job best.
 // TODO: Validate our assumbtion, maybe reverse order makes more sense as it
 // would avoid adding more work to possibly already busy client.
 const selectClient = (clients /*:WindowClient[]*/) => {
-  let hidden = null
   let visible = null
   for (const client of clients) {
     if (client.focused) {
@@ -264,14 +262,10 @@ const selectClient = (clients /*:WindowClient[]*/) => {
         visible = client
         break
       }
-      case "hidden": {
-        hidden = client
-        break
-      }
     }
   }
 
-  return visible || hidden || null
+  return visible
 }
 
 const initCache = async () => {
