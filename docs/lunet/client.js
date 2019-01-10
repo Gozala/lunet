@@ -138,25 +138,21 @@ export const receive = (client /*:LunetClient*/, event /*:any*/) => {
 
 export const request = async (
   client /*:LunetClient*/,
-  event /*:Data.Request*/
+  { data } /*:Data.Request*/
 ) => {
   await client.connected
 
-  client.host.contentWindow.postMessage(
-    event.data,
-    client.host.src,
-    event.data.transfer
-  )
+  client.host.contentWindow.postMessage(data, client.host.src, data.transfer)
 }
 
 export const respond = async (
   client /*:LunetClient*/,
-  event /*:Data.Response*/
+  { data } /*:Data.Response*/
 ) => {
   await client.controlled
   const { service } = client
   if (service) {
-    service.postMessage(event.data, event.data.transfer)
+    service.postMessage(data, data.transfer)
   } else {
     setStatus(client, "🚫")
   }
