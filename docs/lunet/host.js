@@ -151,7 +151,6 @@ const decodeRequest = (request /*:Data.RequestData*/) =>
     credentials: request.credentials,
     destination: request.destination,
     integrity: request.integrity,
-    mode: request.mode,
     redirect: request.redirect,
     referrer: request.referrer,
     referrerPolicy: request.referrerPolicy
