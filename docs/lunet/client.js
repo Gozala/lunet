@@ -61,7 +61,6 @@ export class LunetClient extends HTMLElement {
     return serviceWorker ? serviceWorker.controller : null
   }
 }
-customElements.define("lunet-client", LunetClient)
 
 export const connect = async (
   client /*:LunetClient*/,
@@ -161,3 +160,5 @@ const setStatus = (client, status) => {
 
 const when = (type, target) =>
   new Promise(resolve => target.addEventListener(type, resolve, { once: true }))
+
+customElements.define("lunet-client", LunetClient)

@@ -49,7 +49,6 @@ class LunetHost extends HTMLElement {
     return getSetting(this, "mount", "")
   }
 }
-customElements.define("lunet-host", LunetHost)
 
 export const connect = async (
   host /*:LunetHost*/,
@@ -200,3 +199,5 @@ export const getSetting = (
 
 const when = (type, target) =>
   new Promise(resolve => target.addEventListener(type, resolve, { once: true }))
+
+customElements.define("lunet-host", LunetHost)
