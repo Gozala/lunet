@@ -152,14 +152,15 @@ const encodeRequest = async (
   const $request /*:Object*/ = request
   const headers /*:any*/ = [...request.headers.entries()]
   const mode = String(request.mode) === "navigate" ? null : request.mode
+  const cache = request.cache === "only-if-cached" ? "default" : request.cache
 
   return {
     url,
     body,
     headers,
     mode,
+    cache,
     method: request.method,
-    cache: request.cache,
     credentials: request.credentials,
     destination: $request.destination,
     integrity: request.integrity,
