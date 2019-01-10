@@ -68,14 +68,14 @@ export const connect = async (
 ) => {
   const { mount, serviceURL, hostURL, scope } = client
   const src = `${serviceURL}?mount=${mount}`
+  serviceWorker.addEventListener("message", client)
+  client.ownerDocument.defaultView.addEventListener("message", client)
 
   const host = createHost(hostURL, client.ownerDocument)
   client.host = host
   client.root.append(host, status)
 
   client.connected = when("load", host)
-  host.addEventListener("message", client)
-  serviceWorker.addEventListener("message", client)
 
   if (serviceWorker.controller) {
     client.controlled = Promise.resolve()
