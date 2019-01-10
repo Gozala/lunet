@@ -95,7 +95,7 @@ export const connect = async (
 }
 
 export const receive = (client /*:LunetClient*/, event /*:any*/) => {
-  if (event.target instanceof ServiceWorker) {
+  if (event.source instanceof ServiceWorker) {
     return request(client, event)
   } else {
     return respond(client, event)
