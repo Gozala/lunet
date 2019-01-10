@@ -60,7 +60,7 @@ export const connect = async (
   try {
     setStatus(host, "⚙️ Setting things up, to serve you even without interent.")
 
-    const serviceURL = new URL("/service.js", window.location.href)
+    const serviceURL = new URL("/lunet/service.js", window.location.href)
     // Uses the scope of the page it's served from.
 
     const registration = await serviceWorker.register(serviceURL.href, {
