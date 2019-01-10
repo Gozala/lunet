@@ -89,7 +89,7 @@ export const connect = async (
   await client.controlled
   setStatus(client, "🛰")
 
-  if (client.hasAttribute("reconnect")) {
+  if (!client.hasAttribute("passive")) {
     client.ownerDocument.location.reload()
   }
 }

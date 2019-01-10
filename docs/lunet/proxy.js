@@ -199,7 +199,7 @@ const noClientFound = (request /*:Request*/) =>
 
 const clientMarkup = () =>
   `<script type="module" src="${clientURL.href}" />
-<lunet-client></lunet-client>
+<lunet-client passive></lunet-client>
 
 
 `
@@ -214,7 +214,7 @@ const reconnectRoute = (request /*:Request*/) =>
     <script type="module" src="${clientURL.href}"></script>
   </head>
   <body>
-    <lunet-client reconnect></lunet-client>
+    <lunet-client></lunet-client>
   </body>
 </html>
 `,
