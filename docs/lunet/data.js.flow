@@ -2,17 +2,18 @@
 
 export type RequestData = {
   url: string,
-  body: ?ArrayBuffer,
-  method: string,
-  cache: CacheType,
-  credentials: CredentialsType,
   destination: string,
-  headers: Array<[string, string]> & { [string]: string },
-  integrity: string,
-  mode: ModeType,
-  redirect: RedirectType,
-  referrer: string,
-  referrerPolicy: ReferrerPolicyType
+  body: ?ArrayBuffer,
+  cache?: CacheType,
+  credentials?: CredentialsType,
+  headers?: HeadersInit,
+  integrity?: string,
+  keepalive?: boolean,
+  method?: string,
+  mode?: ?ModeType,
+  redirect?: RedirectType,
+  referrer?: string,
+  referrerPolicy?: ReferrerPolicyType
 }
 
 export type ResponseData = {
@@ -20,7 +21,7 @@ export type ResponseData = {
   body: ArrayBuffer,
   status: number,
   statusText: string,
-  headers: { [string]: string } & Array<[string, string]>,
+  headers: HeadersInit,
   redirected: boolean,
   type: ResponseType
 }

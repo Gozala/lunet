@@ -151,17 +151,18 @@ const encodeRequest = async (
     : request.url
   const $request /*:Object*/ = request
   const headers /*:any*/ = [...request.headers.entries()]
+  const mode = String(request.mode) === "navigate" ? null : request.mode
 
   return {
     url,
     body,
     headers,
+    mode,
     method: request.method,
     cache: request.cache,
     credentials: request.credentials,
     destination: $request.destination,
     integrity: request.integrity,
-    mode: request.mode,
     redirect: request.redirect,
     referrer: request.referrer,
     referrerPolicy: request.referrerPolicy
