@@ -1,0 +1,57 @@
+// @flow strict
+
+export type RequestData = {
+  url: string,
+  body: ?ArrayBuffer,
+  method: string,
+  cache: CacheType,
+  credentials: CredentialsType,
+  destination: string,
+  headers: Array<[string, string]> & { [string]: string },
+  integrity: string,
+  mode: ModeType,
+  redirect: RedirectType,
+  referrer: string,
+  referrerPolicy: ReferrerPolicyType
+}
+
+export type ResponseData = {
+  url: string,
+  body: ArrayBuffer,
+  status: number,
+  statusText: string,
+  headers: { [string]: string } & Array<[string, string]>,
+  redirected: boolean,
+  type: ResponseType
+}
+
+type Transferable = ArrayBuffer | MessagePort | ImageBitmap
+
+export type RequestMessage = {
+  type: "request",
+  id: number,
+  request: RequestData,
+  transfer: Transferable[]
+}
+
+export type ResponseMessage = {
+  type: "response",
+  id: number,
+  response: ResponseData,
+  transfer: Transferable[]
+}
+
+export type Response = {
+  type: "message",
+  data: ResponseMessage,
+  ports: MessagePort[],
+  source: ServiceWorker
+}
+
+export type Request = {
+  type: "message",
+  data: RequestMessage,
+  ports: MessagePort[],
+  source: WindowProxy,
+  origin: string
+}
