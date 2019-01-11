@@ -172,7 +172,7 @@ const decodeResponse = (response /*:Data.ResponseData*/) /*:Response*/ => {
   const headers = new Headers(response.headers)
   const contentType = headers.get("content-type") || ""
   const body = contentType.includes("text/html")
-    ? new Blob([clientMarkup(), response.body], { type: "text/html" })
+    ? new Blob([response.body, clientMarkup()], { type: "text/html" })
     : response.body
 
   return new Response(body, {
@@ -198,11 +198,9 @@ const noClientFound = (request /*:Request*/) =>
   })
 
 const clientMarkup = () =>
-  `<script type="module" src="${clientURL.href}" />
-<lunet-client passive></lunet-client>
-
-
-`
+  `
+<script type="module" src="${clientURL.href}" />
+<lunet-client passive></lunet-client>`
 
 const reconnectRoute = (request /*:Request*/) =>
   new Response(
