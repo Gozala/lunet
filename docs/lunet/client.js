@@ -13,6 +13,7 @@ export class LunetClient extends HTMLElement {
   handleEvent:Event => mixed
   connected:Promise<mixed>
   controlled:Promise<mixed>
+  port:MessagePort
   */
   constructor() {
     super()
@@ -68,14 +69,17 @@ export const connect = async (
 ) => {
   const { mount, serviceURL, hostURL, scope } = client
   const src = `${serviceURL}?mount=${mount}`
+  const { port1, port2 } = new MessageChannel()
+  port1.addEventListener("message", client)
   serviceWorker.addEventListener("message", client)
-  client.ownerDocument.defaultView.addEventListener("message", client)
 
   const host = createHost(hostURL, client.ownerDocument)
   client.host = host
   client.root.append(host, status)
+  client.port = port1
 
   client.connected = when("load", host)
+  host.contentWindow.postMessage("connect", host.src, [port2])
 
   if (serviceWorker.controller) {
     client.controlled = Promise.resolve()
@@ -142,11 +146,7 @@ export const request = async (
 ) => {
   await client.connected
 
-  client.host.contentWindow.postMessage(
-    data,
-    client.host.src,
-    transfer(data.request)
-  )
+  client.port.postMessage(data, transfer(data.request))
 }
 
 export const respond = async (

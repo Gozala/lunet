@@ -10,6 +10,7 @@ class LunetHost extends HTMLElement {
   isConnected:boolean
   status:HTMLElement
   controlled:Promise<mixed>
+  port:MessagePort
   */
   constructor() {
     super()
@@ -34,7 +35,7 @@ class LunetHost extends HTMLElement {
     }
   }
   disconnectedCallback() {}
-  handleEvent(event /*:Data.Request*/) {
+  handleEvent(event) {
     switch (event.type) {
       case "message": {
         return receive(this, event)
@@ -55,7 +56,6 @@ export const connect = async (
   serviceWorker /*:ServiceWorkerContainer*/
 ) => {
   const window = host.ownerDocument.defaultView
-  window.addEventListener("message", host)
 
   try {
     setStatus(host, "⚙️ Setting things up, to serve you even without interent.")
@@ -88,8 +88,13 @@ export const connect = async (
   }
 }
 
-export const receive = (host /*:LunetHost*/, message /*:Data.Request*/) =>
-  relay(host, message)
+export const receive = (host /*:LunetHost*/, event /*:any*/) => {
+  if (event.target === host.port) {
+    relay(host, event)
+  } else {
+    event.ports[0].addEventListener("message", host)
+  }
+}
 
 export const relay = async (host /*:LunetHost*/, event /*:Data.Request*/) => {
   const { data, source, origin } = event
