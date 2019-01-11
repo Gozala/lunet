@@ -79,7 +79,6 @@ export const connect = async (
   client.port = port1
 
   client.connected = when("load", host)
-  host.contentWindow.postMessage("connect", host.src, [port2])
 
   if (serviceWorker.controller) {
     client.controlled = Promise.resolve()
@@ -89,6 +88,9 @@ export const connect = async (
     await serviceWorker.register(src, { scope, type: "classic" })
     setStatus(client, "🎛")
   }
+
+  await client.connected
+  host.contentWindow.postMessage("connect", host.src, [port2])
 
   await client.controlled
   setStatus(client, "🛰")
