@@ -170,10 +170,10 @@ const encodeRequest = async (
 
 const decodeResponse = (response /*:Data.ResponseData*/) /*:Response*/ => {
   const headers = new Headers(response.headers)
-  const body =
-    headers.get("content-type") === "text/html"
-      ? new Blob([clientMarkup(), response.body], { type: "text/html" })
-      : response.body
+  const contentType = headers.get("content-type") || ""
+  const body = contentType.includes("text/html")
+    ? new Blob([clientMarkup(), response.body], { type: "text/html" })
+    : response.body
 
   return new Response(body, {
     status: response.status,
