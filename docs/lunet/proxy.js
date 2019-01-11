@@ -107,7 +107,7 @@ const fetchThrough = async (request /*:Request*/, client /*:WindowClient*/) => {
     id,
     request: payload
   }
-  client.postMessage(message)
+  client.postMessage(message, transfer(payload))
   const response = await receiveResponse(id)
   return decodeResponse(response)
 }
@@ -278,6 +278,8 @@ const initCache = async () => {
   console.log(`Companion "${self.registration.source}" is caching`, urls)
   return cache.addAll(urls)
 }
+
+const transfer = data => (data.body ? [data.body] : [])
 
 self.addEventListener("install", install)
 self.addEventListener("activate", activate)
