@@ -56,6 +56,7 @@ export const connect = async (
   serviceWorker /*:ServiceWorkerContainer*/
 ) => {
   const window = host.ownerDocument.defaultView
+  window.addEventListener("message", host)
 
   try {
     setStatus(host, "⚙️ Setting things up, to serve you even without interent.")
