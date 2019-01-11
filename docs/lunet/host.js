@@ -101,7 +101,7 @@ export const receive = (host /*:LunetHost*/, event /*:any*/) => {
 }
 
 export const relay = async (host /*:LunetHost*/, event /*:Data.Request*/) => {
-  const { data, source, origin } = event
+  const { data, target, origin } = event
   const { request, id } = data
   const response = await fetch(decodeRequest(request))
 
@@ -113,7 +113,7 @@ export const relay = async (host /*:LunetHost*/, event /*:Data.Request*/) => {
     response: out
   }
 
-  source.postMessage(message, origin, transfer(out))
+  target.postMessage(message, transfer(out))
 }
 
 const activate = async host => {

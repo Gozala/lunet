@@ -51,6 +51,6 @@ export type Request = {
   type: "message",
   data: RequestMessage,
   ports: MessagePort[],
-  source: WindowProxy,
+  target: MessagePort,
   origin: string
 }
