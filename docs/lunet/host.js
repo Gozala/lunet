@@ -101,11 +101,15 @@ export const relay = async (host /*:LunetHost*/, event /*:Data.Request*/) => {
   const message /*:Data.ResponseMessage*/ = {
     type: "response",
     id,
-    response: out
-    // transfer: [encodedResponse.body]
+    response: out,
+    transfer: [out.body]
   }
 
-  host.ownerDocument.defaultView.top.postMessage(message, origin, [out.body])
+  host.ownerDocument.defaultView.top.postMessage(
+    message,
+    origin,
+    message.transfer
+  )
 }
 
 const activate = async host => {
