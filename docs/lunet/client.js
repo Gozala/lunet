@@ -142,7 +142,11 @@ export const request = async (
 ) => {
   await client.connected
 
-  client.host.contentWindow.postMessage(data, client.host.src, data.transfer)
+  client.host.contentWindow.postMessage(
+    data,
+    client.host.src,
+    transfer(data.request)
+  )
 }
 
 export const respond = async (
@@ -152,7 +156,7 @@ export const respond = async (
   await client.controlled
   const { service } = client
   if (service) {
-    service.postMessage(data, data.transfer)
+    service.postMessage(data, transfer(data.response))
   } else {
     setStatus(client, "🚫")
   }
@@ -190,5 +194,7 @@ const setStatus = (client, status) => {
 
 const when = (type, target) =>
   new Promise(resolve => target.addEventListener(type, resolve, { once: true }))
+
+const transfer = data => (data.body ? [data.body] : [])
 
 customElements.define("lunet-client", LunetClient)

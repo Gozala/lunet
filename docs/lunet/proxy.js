@@ -102,12 +102,10 @@ const proxyFetch = async (event /*:FetchEvent*/) => {
 const fetchThrough = async (request /*:Request*/, client /*:WindowClient*/) => {
   const id = ++requestID
   const payload = await encodeRequest(request)
-  const transfer = payload.body ? [payload.body] : []
   const message /*:Data.RequestMessage*/ = {
     type: "request",
     id,
-    request: payload,
-    transfer
+    request: payload
   }
   client.postMessage(message)
   const response = await receiveResponse(id)
