@@ -91,6 +91,7 @@ export const connect = async (
 
   await client.connected
   host.contentWindow.postMessage("connect", host.src, [port2])
+  client.port.start()
 
   await client.controlled
   setStatus(client, "🛰")
