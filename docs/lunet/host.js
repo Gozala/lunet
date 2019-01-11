@@ -10,7 +10,6 @@ class LunetHost extends HTMLElement {
   isConnected:boolean
   status:HTMLElement
   controlled:Promise<mixed>
-  port:MessagePort
   */
   constructor() {
     super()
@@ -90,10 +89,14 @@ export const connect = async (
 }
 
 export const receive = (host /*:LunetHost*/, event /*:any*/) => {
-  if (event.target === host.port) {
+  if (event.target instanceof MessagePort) {
     relay(host, event)
   } else {
-    event.ports[0].addEventListener("message", host)
+    const [port] = event.ports
+    if (port) {
+      port.addEventListener("message", host)
+      port.start()
+    }
   }
 }
 
