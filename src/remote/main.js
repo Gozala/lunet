@@ -31,9 +31,8 @@ const main = async port => {
 }
 
 const request = async request => {
-  console.log(request.url, request.method, request.headers)
-  console.log(baseURL)
-  const path = `./docs${request.url}`
+  const requestURL = new URL(request.url)
+  const path = `./docs${requestURL.pathname}`
   const url = new URL(path.endsWith("/") ? `${path}index.html` : path, baseURL)
 
   console.log(url)

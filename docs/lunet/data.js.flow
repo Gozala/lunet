@@ -30,13 +30,13 @@ type Transferable = ArrayBuffer | MessagePort | ImageBitmap
 
 export type RequestMessage = {
   type: "request",
-  id: number,
+  id: string,
   request: RequestData
 }
 
 export type ResponseMessage = {
   type: "response",
-  id: number,
+  id: string,
   response: ResponseData
 }
 

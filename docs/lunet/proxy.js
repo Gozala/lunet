@@ -4,6 +4,7 @@
 import * as Data from "./data.js"
 */
 
+const VERSION = "0.0.1"
 const serviceURL = new URL("https://lunet.link/")
 const clientURL = new URL("/lunet/client.js", serviceURL)
 const mountURL = new URL(
@@ -13,10 +14,8 @@ const mountURL = new URL(
 
 const install = (event /*:InstallEvent*/) => {
   console.log(`Proxy installed at ${self.registration.scope}`)
-  // We cache all the companion assets because occasionally we will need to
-  // reconnect to the "access point" SW and if we won't be able to do so
-  // while offline (as access point doesn't serve across origins).
-  event.waitUntil(initCache())
+  // Cache all the assets that we may need so they can be served offline.
+  event.waitUntil(setup())
 }
 
 // Companion service is used p2p sites / applications. Site uses embedded
@@ -25,12 +24,17 @@ const install = (event /*:InstallEvent*/) => {
 // network.
 const activate = (event /*:ExtendableEvent*/) => {
   console.log(`Proxy activated at ${self.registration.scope}`)
-
-  event.waitUntil(self.clients.claim())
+  // At the moment we claim all the clients. In the future we should
+  // consider how do we deal with SW updates when former one already has
+  // clients.
+  event.waitUntil(initialize())
 }
 
 const request = (event /*:FetchEvent*/) => {
-  console.log(`Proxy request at ${self.registration.scope}`, event)
+  console.log(
+    `Proxy ${self.registration.scope} got a fetch request ${event.request.url}`,
+    event
+  )
   const response = respond(event)
   event.respondWith(response)
 }
@@ -48,6 +52,11 @@ const respond = (event /*:FetchEvent*/) => {
 }
 
 const localFetch = (event /*:FetchEvent*/) => {
+  console.log(
+    `Proxy ${self.registration.scope} handling a local fetch request ${
+      event.request.url
+    }`
+  )
   switch (event.request.mode) {
     case "navigate": {
       return navigate(event)
@@ -59,7 +68,12 @@ const localFetch = (event /*:FetchEvent*/) => {
 }
 
 const serviceFetch = async event => {
-  const cache = await caches.open("lunet")
+  console.log(
+    `Proxy ${self.registration.scope} handling a service fetch request ${
+      event.request.url
+    }`
+  )
+  const cache = await caches.open(VERSION)
   const response = await cache.match(event.request)
   if (response) {
     return response
@@ -76,12 +90,42 @@ const serviceFetch = async event => {
 }
 
 const navigate = async (event /*:FetchEvent*/) => {
-  const client = await findClient(event.clientId)
-  if (client) {
-    return fetchThrough(event.request, client)
-  } else {
-    return reconnectRoute(event.request)
-  }
+  // const client = await findClient(event.clientId)
+  // console.log(
+  //   `Proxy ${self.registration.scope} got navigation request ${
+  //     event.request.url
+  //   }`
+  // )
+  // if (client) {
+  //   return fetchThrough(event.request, client)
+  // } else {
+  //   console.log(
+  //     `Proxy ${
+  //       self.registration.scope
+  //     } serving reconnection page as no client was found to obtain it through ${
+  //       event.request.url
+  //     }`
+  //   )
+  //   return reconnectRoute(event.request)
+  // }
+  return new Response(
+    `<html>
+  <head>
+    <meta charset="utf-8" />
+    <script type="module" src="${clientURL.href}"></script>
+  </head>
+  <body>
+    <lunet-client></lunet-client>
+  </body>
+</html>
+`,
+    {
+      status: 200,
+      headers: {
+        "Content-Type": "text/html"
+      }
+    }
+  )
 }
 
 const proxyFetch = async (event /*:FetchEvent*/) => {
@@ -100,8 +144,19 @@ const proxyFetch = async (event /*:FetchEvent*/) => {
 }
 
 const fetchThrough = async (request /*:Request*/, client /*:WindowClient*/) => {
-  const id = ++requestID
+  const id = `${Math.random()
+    .toString(36)
+    .slice(2)}`
   const payload = await encodeRequest(request)
+
+  console.log(
+    `Proxy is forwarding fetch request ${id} ${payload.url} through ${
+      client.id
+    }`,
+    payload,
+    client
+  )
+
   const message /*:Data.RequestMessage*/ = {
     type: "request",
     id,
@@ -109,6 +164,7 @@ const fetchThrough = async (request /*:Request*/, client /*:WindowClient*/) => {
   }
   client.postMessage(message, transfer(payload))
   const response = await receiveResponse(id)
+  console.log(`Proxy is received fetch response ${id} ${payload.url}`, response)
   return decodeResponse(response)
 }
 
@@ -116,6 +172,7 @@ const fetchThrough = async (request /*:Request*/, client /*:WindowClient*/) => {
 const foreignFetch = event => fetch(event.request)
 
 const receive = ({ data, ports, source } /*:Data.Response*/) => {
+  console.log(`Proxy received fetch response`, data)
   switch (data.type) {
     case "response": {
       const { id, response } = data
@@ -132,10 +189,9 @@ const receive = ({ data, ports, source } /*:Data.Response*/) => {
   }
 }
 
-let requestID = 0
-const pendingRequests /*:{[number]:(Data.ResponseData) => void}*/ = {}
+const pendingRequests /*:{[string]:(Data.ResponseData) => void}*/ = {}
 
-const receiveResponse = (id /*:number*/) /*:Promise<Data.ResponseData>*/ =>
+const receiveResponse = (id /*:string*/) /*:Promise<Data.ResponseData>*/ =>
   new Promise((resolve /*:Data.ResponseData => void*/) => {
     pendingRequests[id] = resolve
   })
@@ -169,16 +225,10 @@ const encodeRequest = async (
 }
 
 const decodeResponse = (response /*:Data.ResponseData*/) /*:Response*/ => {
-  const headers = new Headers(response.headers)
-  const contentType = headers.get("content-type") || ""
-  const body = contentType.includes("text/html")
-    ? new Blob([response.body, clientMarkup()], { type: "text/html" })
-    : response.body
-
-  return new Response(body, {
+  return new Response(response.body, {
     status: response.status,
     statusText: response.statusText,
-    headers
+    headers: new Headers(response.headers)
   })
 }
 
@@ -199,7 +249,7 @@ const noClientFound = (request /*:Request*/) =>
 
 const clientMarkup = () =>
   `
-<script type="module" src="${clientURL.href}" />
+<script type="module" src="${clientURL.href}"></script>
 <lunet-client passive></lunet-client>`
 
 const reconnectRoute = (request /*:Request*/) =>
@@ -227,15 +277,14 @@ const reconnectRoute = (request /*:Request*/) =>
 const findClient = async (id /*:string*/) /*:Promise<?WindowClient>*/ => {
   const client = id != "" ? await self.clients.get(id) : null
   // If request is coming from the specific client than select that client
-  if (client) {
+  if (client && client.visibilityState === "visible") {
     return client
   }
   // Otherwise get all window clients (as only they will have <lunet-link>
   // nodes that can be used for relaying requests and select the best candidate.
-  else {
-    const matchedClients = await self.clients.matchAll({ type: "window" })
-    return selectClient(matchedClients)
-  }
+
+  const matchedClients = await self.clients.matchAll({ type: "window" })
+  return selectClient(matchedClients)
 }
 
 // Select the client that is likely to be our best bet for relaying a message.
@@ -264,17 +313,34 @@ const selectClient = (clients /*:WindowClient[]*/) => {
   return visible
 }
 
-const initCache = async () => {
-  console.log(`Init lunet cache ${self.registration.source}`)
-  const cache = await caches.open("lunet")
+const setup = async () => {
+  console.log(`Proxy is setting up ${self.registration.scope}`)
+  const cache = await caches.open(VERSION)
   const urls = [
-    clientURL,
-    new URL("/", serviceURL),
-    new URL("/lunet/host.js", serviceURL),
-    new URL("/lunet/proxy.js", serviceURL)
+    clientURL.href,
+    new URL("/", serviceURL).href,
+    new URL("/lunet/host.js", serviceURL).href,
+    new URL("/lunet/proxy.js", serviceURL).href
   ]
-  console.log(`Companion "${self.registration.source}" is caching`, urls)
-  return cache.addAll(urls)
+  console.log(`Proxy is caching`, urls)
+  await cache.addAll(urls)
+  return await self.skipWaiting()
+}
+
+const initialize = async () => {
+  console.log(`Proxy is initializing ${self.registration.scope}`)
+  const clients = await self.clients.matchAll({ includeUncontrolled: true })
+  console.log(`Proxy is claiming all clients ${clients.map($ => $.url)}`)
+
+  await self.clients.claim()
+
+  const versions = await caches.keys()
+  for (const version of versions) {
+    if (version !== VERSION) {
+      console.log(`Proxy is clearing obsolete cache: ${version}`)
+      await caches.delete(version)
+    }
+  }
 }
 
 const transfer = data => (data.body ? [data.body] : [])

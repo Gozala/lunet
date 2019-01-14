@@ -1,11 +1,12 @@
 // @flow strict
 
+const VERSION = "0.0.2"
 const daemonURL = new URL("https://127.0.0.1:9000")
 
 const install = (event /*:InstallEvent*/) => {
   console.log(`Service installed at ${self.registration.scope}`)
   // Cache all the assets that we may need so they can be served offline.
-  event.waitUntil(initCache())
+  event.waitUntil(setup())
 }
 
 const activate = (event /*:ExtendableEvent*/) => {
@@ -13,7 +14,7 @@ const activate = (event /*:ExtendableEvent*/) => {
   // At the moment we claim all the clients. In the future we should
   // consider how do we deal with SW updates when former one already has
   // clients.
-  event.waitUntil(self.clients.claim())
+  event.waitUntil(initialize())
 }
 
 const request = (event /*:FetchEvent*/) => {
@@ -22,18 +23,23 @@ const request = (event /*:FetchEvent*/) => {
   event.respondWith(response)
 }
 
-const respond = event => {
+const respond = async event => {
   const url = new URL(event.request.url)
   switch (url.origin) {
-    case self.origin:
-      return localFetch(event)
+    case self.origin: {
+      const response = await localFetch(event)
+      console.log(`Service response`, response)
+      return response
+    }
     default:
-      return foreignFetch(event)
+      const response = await foreignFetch(event)
+      console.log(`Service response`, response)
+      return response
   }
 }
 
 const localFetch = async event => {
-  const cache = await caches.open("lunet")
+  const cache = await caches.open(VERSION)
   const response = await cache.match(event.request)
   if (response) {
     return response
@@ -42,7 +48,18 @@ const localFetch = async event => {
   }
 }
 
-const foreignFetch = event => fetch(event.request)
+const foreignFetch = event => {
+  const url = new URL(event.request.url)
+  // At the moment firefox blocks requests to all http from the SW but it does
+  // not from the document context. To workaroud that we funnel local requests
+  // through our serice.
+  switch (url.hostname) {
+    case "127.0.0.1":
+      return serviceFetch(event)
+    default:
+      return fetch(event.request)
+  }
+}
 
 // This just routes requests to local systray app. In practice we would want to
 // try bunch of different ways to get the content instead.
@@ -89,14 +106,33 @@ const serviceFetch = async ({ request }) => {
   }
 }
 
-const initCache = async () => {
-  const cache = await caches.open("lunet")
-  return cache.addAll([
+const setup = async () => {
+  console.log("Service Skip Waiting")
+  await self.skipWaiting()
+
+  const cache = await caches.open(VERSION)
+  await cache.addAll([
     "./",
     "./lunet/host.js",
     "./lunet/client.js",
     "./lunet/proxy.js"
   ])
+}
+
+const initialize = async () => {
+  console.log(`Initializing service`)
+  const clients = await self.clients.matchAll({ includeUncontrolled: true })
+  console.log(`Service worker claiming clients ${clients.map($ => $.url)}`)
+
+  await self.clients.claim()
+
+  const versions = await caches.keys()
+  for (const version of versions) {
+    if (version !== VERSION) {
+      console.log(`Service worker is clearing obsolete cache`)
+      await caches.delete(version)
+    }
+  }
 }
 
 const encodeBody = (request /*:Request*/) => {

@@ -9,7 +9,7 @@ class LunetHost extends HTMLElement {
   root:ShadowRoot
   isConnected:boolean
   status:HTMLElement
-  controlled:Promise<mixed>
+  ready:Promise<mixed>
   */
   constructor() {
     super()
@@ -54,28 +54,31 @@ export const connect = async (
   host /*:LunetHost*/,
   serviceWorker /*:ServiceWorkerContainer*/
 ) => {
+  console.log("Host is connecting")
   const window = host.ownerDocument.defaultView
   window.addEventListener("message", host)
-
   try {
     setStatus(host, "⚙️ Setting things up, to serve you even without interent.")
 
     const serviceURL = new URL("/service.js?", window.location.href)
     // Uses the scope of the page it's served from.
 
+    const ready = serviceWorker.controller
+      ? Promise.resolve(serviceWorker.controller)
+      : when("controllerchange", serviceWorker)
+    host.ready = ready
+
+    console.log(`Host is registering service worker ${serviceURL.href}`)
+
     const registration = await serviceWorker.register(serviceURL.href, {
       scope: "./",
       type: "classic"
     })
+
     setStatus(host, "🎛 Activating local setup")
 
-    const controlled = serviceWorker.controller
-      ? Promise.resolve()
-      : when("controllerchange", serviceWorker)
-
-    host.controlled = controlled
-
-    await controlled
+    await ready
+    console.log(`Host is controlled ${serviceURL.href}`, registration)
     setStatus(host, "🛰 All set!")
 
     if (window.top === window) {
@@ -92,6 +95,7 @@ export const receive = (host /*:LunetHost*/, event /*:any*/) => {
   if (event.target instanceof MessagePort) {
     relay(host, event)
   } else {
+    console.log(`Host received a port from the client`)
     const [port] = event.ports
     if (port) {
       port.addEventListener("message", host)
@@ -103,6 +107,12 @@ export const receive = (host /*:LunetHost*/, event /*:any*/) => {
 export const relay = async (host /*:LunetHost*/, event /*:Data.Request*/) => {
   const { data, target, origin } = event
   const { request, id } = data
+
+  await host.ready
+  console.log(
+    `Host is relaying request ${id} to daemon ${request.url}`,
+    navigator.serviceWorker.controller
+  )
   const response = await fetch(decodeRequest(request))
 
   const out = await encodeResponse(response)
@@ -112,6 +122,11 @@ export const relay = async (host /*:LunetHost*/, event /*:Data.Request*/) => {
     id,
     response: out
   }
+
+  console.log(
+    `Host is forwarding response ${id} back to client ${out.url}`,
+    message
+  )
 
   target.postMessage(message, transfer(out))
 }

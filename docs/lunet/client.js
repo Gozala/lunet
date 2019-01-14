@@ -23,6 +23,11 @@ export class LunetClient extends HTMLElement {
 
     this.root = root
     this.status = status
+
+    this.style.position = "absolute"
+    this.style.top = "0"
+    this.style.right = "0"
+    this.style.padding = "8px"
   }
   connectedCallback() {
     if (this.isConnected) {
@@ -80,14 +85,20 @@ export const connect = async (
 
   client.connected = when("load", host)
 
-  if (serviceWorker.controller) {
-    client.controlled = Promise.resolve()
-  } else {
-    client.controlled = when("controllerchange", serviceWorker)
+  if (!serviceWorker.controller) {
     setStatus(client, "⚙️")
-    await serviceWorker.register(src, { scope, type: "classic" })
-    setStatus(client, "🎛")
+    const registration = await serviceWorker.register(src, {
+      scope,
+      type: "classic"
+    })
   }
+  const controlled = serviceWorker.controller
+    ? Promise.resolve()
+    : when("controllerchange", serviceWorker)
+
+  client.controlled = controlled
+
+  setStatus(client, "🎛")
 
   await client.connected
   host.contentWindow.postMessage("connect", host.src, [port2])
@@ -107,14 +118,11 @@ const activate = async (client /*:LunetClient*/, event /*:any*/) => {
   const content = await response.text()
 
   const parser = new DOMParser()
-  const { documentElement } = parser.parseFromString(content, "text/html")
+  const root = parser.parseFromString(content, "text/html")
 
-  const root = documentElement
-    ? document.adoptNode(documentElement)
-    : document.createElement("html")
-
-  const scripts = [...root.querySelectorAll("script")]
-  for (const source of scripts) {
+  // collect scripts scripts
+  const scripts = []
+  for (const source of [...root.querySelectorAll("script")]) {
     const script = document.createElement("script")
     for (const { name, value, namespaceURI } of source.attributes) {
       if (namespaceURI) {
@@ -123,15 +131,25 @@ const activate = async (client /*:LunetClient*/, event /*:any*/) => {
         script.setAttribute(name, value)
       }
     }
-    source.replaceWith(script)
+    scripts.push(script)
+    source.remove()
   }
 
-  history.pushState(null, "", response.url)
+  // Remove old nodes
+  const $document /*:any*/ = document
+  const {
+    head,
+    body
+  } /*:{head:HTMLHeadElement, body:HTMLBodyElement}*/ = $document
+  const $head /*:any*/ = document.head
 
-  if (document.documentElement) {
-    document.documentElement.replaceWith(root)
-  } else {
-    document.appendChild(root)
+  head.innerHTML = ""
+  head.append(...document.adoptNode(root.head).childNodes)
+  body.append(...document.adoptNode(root.body).childNodes)
+
+  for (const script of scripts) {
+    head.append(script)
+    await when("load", script)
   }
 }
 
@@ -149,6 +167,8 @@ export const request = async (
 ) => {
   await client.connected
 
+  console.log("Client is forwarding request", data)
+
   client.port.postMessage(data, transfer(data.request))
 }
 
@@ -158,6 +178,9 @@ export const respond = async (
 ) => {
   await client.controlled
   const { service } = client
+
+  console.log("Client received response, forwarding to proxy", data)
+
   if (service) {
     service.postMessage(data, transfer(data.response))
   } else {
@@ -187,7 +210,11 @@ export const getSetting = (
 const createHost = (url, document) /*:HTMLIFrameElement*/ => {
   const frame = document.createElement("iframe")
   frame.src = url
-  frame.style.display = "none"
+  frame.style.width = "0px"
+  frame.style.height = "0px"
+  frame.style.position = "absolute"
+  frame.style.zIndex = "-1"
+  frame.style.border = "none"
   return frame
 }
 
