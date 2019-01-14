@@ -109,10 +109,7 @@ export const relay = async (host /*:LunetHost*/, event /*:Data.Request*/) => {
   const { request, id } = data
 
   await host.ready
-  console.log(
-    `Host is relaying request ${id} to daemon ${request.url}`,
-    navigator.serviceWorker.controller
-  )
+  console.log(`Host is relaying request ${id} to daemon ${request.url}`)
   const response = await fetch(decodeRequest(request))
 
   const out = await encodeResponse(response)
@@ -225,4 +222,8 @@ const when = (type, target) =>
 
 const transfer = data => (data.body ? [data.body] : [])
 
+const ensureHead = document =>
+  document.head || document.appendChild(document.createElement("head"))
+
 customElements.define("lunet-host", LunetHost)
+ensureHead(document).appendChild(document.createElement("lunet-host"))

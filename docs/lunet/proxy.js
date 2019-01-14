@@ -90,24 +90,6 @@ const serviceFetch = async event => {
 }
 
 const navigate = async (event /*:FetchEvent*/) => {
-  // const client = await findClient(event.clientId)
-  // console.log(
-  //   `Proxy ${self.registration.scope} got navigation request ${
-  //     event.request.url
-  //   }`
-  // )
-  // if (client) {
-  //   return fetchThrough(event.request, client)
-  // } else {
-  //   console.log(
-  //     `Proxy ${
-  //       self.registration.scope
-  //     } serving reconnection page as no client was found to obtain it through ${
-  //       event.request.url
-  //     }`
-  //   )
-  //   return reconnectRoute(event.request)
-  // }
   return new Response(
     `<html>
   <head>
@@ -115,7 +97,6 @@ const navigate = async (event /*:FetchEvent*/) => {
     <script type="module" src="${clientURL.href}"></script>
   </head>
   <body>
-    <lunet-client></lunet-client>
   </body>
 </html>
 `,
@@ -251,28 +232,6 @@ const clientMarkup = () =>
   `
 <script type="module" src="${clientURL.href}"></script>
 <lunet-client passive></lunet-client>`
-
-const reconnectRoute = (request /*:Request*/) =>
-  new Response(
-    `<html>
-  <head>
-    <meta charset="utf-8" />
-    <meta name="mount" content="${serviceURL.pathname}" />
-    <title>Reconnecting</title>
-    <script type="module" src="${clientURL.href}"></script>
-  </head>
-  <body>
-    <lunet-client></lunet-client>
-  </body>
-</html>
-`,
-    {
-      status: 200,
-      headers: {
-        "Content-Type": "text/html"
-      }
-    }
-  )
 
 const findClient = async (id /*:string*/) /*:Promise<?WindowClient>*/ => {
   const client = id != "" ? await self.clients.get(id) : null

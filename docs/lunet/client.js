@@ -23,11 +23,6 @@ export class LunetClient extends HTMLElement {
 
     this.root = root
     this.status = status
-
-    this.style.position = "absolute"
-    this.style.top = "0"
-    this.style.right = "0"
-    this.style.padding = "8px"
   }
   connectedCallback() {
     if (this.isConnected) {
@@ -43,6 +38,12 @@ export class LunetClient extends HTMLElement {
     }
   }
   disconnectedCallback() {}
+  applyStyle() {
+    this.style.position = "absolute"
+    this.style.top = "0"
+    this.style.right = "0"
+    this.style.padding = "8px"
+  }
   handleEvent(event /*:Event*/) {
     switch (event.type) {
       case "message": {
@@ -118,12 +119,26 @@ const activate = async (client /*:LunetClient*/, event /*:any*/) => {
   const content = await response.text()
 
   const parser = new DOMParser()
-  const root = parser.parseFromString(content, "text/html")
+  const parsed /*:any*/ = parser.parseFromString(content, "text/html")
+  const root /*:{head:HTMLHeadElement, body:HTMLBodyElement} & Document*/ = parsed
+  // Remove old nodes
+  const $document /*:any*/ = document
+  const {
+    head,
+    body
+  } /*:{head:HTMLHeadElement, body:HTMLBodyElement}*/ = $document
 
   // collect scripts scripts
   const scripts = []
+  const links = []
   for (const source of [...root.querySelectorAll("script")]) {
     const script = document.createElement("script")
+    const link = document.createElement("link")
+    link.href = source.src
+    link.rel = "preload"
+    link.as = "script"
+    links.push(link)
+
     for (const { name, value, namespaceURI } of source.attributes) {
       if (namespaceURI) {
         script.setAttributeNS(namespaceURI, name, value)
@@ -132,19 +147,14 @@ const activate = async (client /*:LunetClient*/, event /*:any*/) => {
       }
     }
     scripts.push(script)
+    head.append(link)
     source.remove()
   }
 
-  // Remove old nodes
-  const $document /*:any*/ = document
-  const {
-    head,
-    body
-  } /*:{head:HTMLHeadElement, body:HTMLBodyElement}*/ = $document
-  const $head /*:any*/ = document.head
+  head.append(...links)
 
-  head.innerHTML = ""
   head.append(...document.adoptNode(root.head).childNodes)
+
   body.append(...document.adoptNode(root.body).childNodes)
 
   for (const script of scripts) {
@@ -227,4 +237,8 @@ const when = (type, target) =>
 
 const transfer = data => (data.body ? [data.body] : [])
 
+const ensureHead = document =>
+  document.head || document.appendChild(document.createElement("head"))
+
 customElements.define("lunet-client", LunetClient)
+ensureHead(document).appendChild(document.createElement("lunet-client"))
