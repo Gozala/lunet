@@ -4,7 +4,7 @@
 import * as Data from "./data.js"
 */
 
-const VERSION = "0.0.1"
+const VERSION = "0.0.3"
 const serviceURL = new URL("https://lunet.link/")
 const clientURL = new URL("/lunet/client.js", serviceURL)
 const mountURL = new URL(
@@ -228,11 +228,6 @@ const noClientFound = (request /*:Request*/) =>
     status: 503
   })
 
-const clientMarkup = () =>
-  `
-<script type="module" src="${clientURL.href}"></script>
-<lunet-client passive></lunet-client>`
-
 const findClient = async (id /*:string*/) /*:Promise<?WindowClient>*/ => {
   const client = id != "" ? await self.clients.get(id) : null
   // If request is coming from the specific client than select that client
@@ -273,6 +268,8 @@ const selectClient = (clients /*:WindowClient[]*/) => {
 }
 
 const setup = async () => {
+  const skip = self.skipWaiting()
+
   console.log(`Proxy is setting up ${self.registration.scope}`)
   const cache = await caches.open(VERSION)
   const urls = [
@@ -283,7 +280,10 @@ const setup = async () => {
   ]
   console.log(`Proxy is caching`, urls)
   await cache.addAll(urls)
-  return await self.skipWaiting()
+  console.log(`Proxy cached`)
+
+  await skip
+  console.log("Installation is complete!")
 }
 
 const initialize = async () => {
@@ -300,6 +300,8 @@ const initialize = async () => {
       await caches.delete(version)
     }
   }
+
+  console.log("Proxy activation is complete")
 }
 
 const transfer = data => (data.body ? [data.body] : [])

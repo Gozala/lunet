@@ -1,6 +1,6 @@
 // @flow strict
 
-const VERSION = "0.0.2"
+const VERSION = "0.0.4"
 const daemonURL = new URL("https://127.0.0.1:9000")
 
 const install = (event /*:InstallEvent*/) => {
@@ -117,6 +117,8 @@ const setup = async () => {
     "./lunet/client.js",
     "./lunet/proxy.js"
   ])
+
+  console.log("Installation is complete!")
 }
 
 const initialize = async () => {
@@ -133,6 +135,8 @@ const initialize = async () => {
       await caches.delete(version)
     }
   }
+
+  console.log("Service activation is complete")
 }
 
 const encodeBody = (request /*:Request*/) => {

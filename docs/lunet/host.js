@@ -4,21 +4,27 @@
 import * as Data from "./data.js"
 */
 
-class LunetHost extends HTMLElement {
+class LunetHost {
   /*::
-  root:ShadowRoot
+  ownerDocument:Document
   isConnected:boolean
   status:HTMLElement
   ready:Promise<mixed>
   */
-  constructor() {
-    super()
-    const root = this.attachShadow({ mode: "closed" })
-    const status = this.ownerDocument.createElement("h1")
-    root.appendChild(status)
+  static new(document) {
+    const host = new this(document)
+  }
+  constructor(ownerDocument) {
+    this.ownerDocument = ownerDocument
+    const status = ownerDocument.createElement("h1")
+    const body = ownerDocument.body
+    if (body) {
+      body.appendChild(status)
+    }
 
-    this.root = root
     this.status = status
+    this.isConnected = true
+    this.connectedCallback()
   }
   connectedCallback() {
     if (this.isConnected) {
@@ -199,21 +205,16 @@ const setStatus = (host, status) => {
 }
 
 export const getSetting = (
-  client /*:LunetHost*/,
+  host /*:LunetHost*/,
   name /*:string*/,
   fallback /*:string*/ = ""
 ) /*:string*/ => {
-  const value = client.getAttribute(name)
+  const meta = host.ownerDocument.querySelector(`meta[name=${name}]`)
+  const value = meta ? meta.getAttribute("content") : null
   if (value != null && value !== "") {
     return value
   } else {
-    const meta = client.ownerDocument.querySelector(`meta[name=${name}]`)
-    const value = meta ? meta.getAttribute("content") : null
-    if (value != null && value !== "") {
-      return value
-    } else {
-      return fallback
-    }
+    return fallback
   }
 }
 
@@ -222,8 +223,4 @@ const when = (type, target) =>
 
 const transfer = data => (data.body ? [data.body] : [])
 
-const ensureHead = document =>
-  document.head || document.appendChild(document.createElement("head"))
-
-customElements.define("lunet-host", LunetHost)
-ensureHead(document).appendChild(document.createElement("lunet-host"))
+LunetHost.new(document)

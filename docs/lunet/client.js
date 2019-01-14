@@ -4,9 +4,9 @@
 import * as Data from "./data.js"
 */
 
-export class LunetClient extends HTMLElement {
+export class LunetClient {
   /*::
-  root:ShadowRoot
+  ownerDocument:Document
   host:HTMLIFrameElement
   status:HTMLElement
   isConnected:boolean
@@ -15,14 +15,17 @@ export class LunetClient extends HTMLElement {
   controlled:Promise<mixed>
   port:MessagePort
   */
-  constructor() {
-    super()
-    const root = this.attachShadow({ mode: "closed" })
+  static new(ownerDocument /*:Document*/) {
+    const client = new this(ownerDocument)
+    return client
+  }
+  constructor(ownerDocument /*:Document*/) {
+    this.ownerDocument = ownerDocument
     const status = this.ownerDocument.createElement("span")
-    root.appendChild(status)
 
-    this.root = root
     this.status = status
+    this.isConnected = true
+    this.connectedCallback()
   }
   connectedCallback() {
     if (this.isConnected) {
@@ -38,12 +41,6 @@ export class LunetClient extends HTMLElement {
     }
   }
   disconnectedCallback() {}
-  applyStyle() {
-    this.style.position = "absolute"
-    this.style.top = "0"
-    this.style.right = "0"
-    this.style.padding = "8px"
-  }
   handleEvent(event /*:Event*/) {
     switch (event.type) {
       case "message": {
@@ -81,7 +78,7 @@ export const connect = async (
 
   const host = createHost(hostURL, client.ownerDocument)
   client.host = host
-  client.root.append(host, status)
+  ensureHead(client.ownerDocument).append(host, status)
   client.port = port1
 
   client.connected = when("load", host)
@@ -108,9 +105,7 @@ export const connect = async (
   await client.controlled
   setStatus(client, "🛰")
 
-  if (!client.hasAttribute("passive")) {
-    activate(client)
-  }
+  activate(client)
 }
 
 const activate = async (client /*:LunetClient*/, event /*:any*/) => {
@@ -206,17 +201,12 @@ export const getSetting = (
   name /*:string*/,
   fallback /*:string*/ = ""
 ) /*:string*/ => {
-  const value = client.getAttribute(name)
+  const meta = client.ownerDocument.querySelector(`meta[name=${name}]`)
+  const value = meta ? meta.getAttribute("content") : null
   if (value != null && value !== "") {
     return value
   } else {
-    const meta = client.ownerDocument.querySelector(`meta[name=${name}]`)
-    const value = meta ? meta.getAttribute("content") : null
-    if (value != null && value !== "") {
-      return value
-    } else {
-      return fallback
-    }
+    return fallback
   }
 }
 
@@ -243,5 +233,4 @@ const transfer = data => (data.body ? [data.body] : [])
 const ensureHead = document =>
   document.head || document.appendChild(document.createElement("head"))
 
-customElements.define("lunet-client", LunetClient)
-ensureHead(document).appendChild(document.createElement("lunet-client"))
+LunetClient.new(document)
