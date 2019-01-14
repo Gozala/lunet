@@ -155,12 +155,15 @@ const activate = async (client /*:LunetClient*/, event /*:any*/) => {
 
   head.append(...document.adoptNode(root.head).childNodes)
 
+  const display = body.style.display
+  body.style.display = "none"
   body.append(...document.adoptNode(root.body).childNodes)
 
   for (const script of scripts) {
     head.append(script)
     await when("load", script)
   }
+  body.style.display = display
 }
 
 export const receive = (client /*:LunetClient*/, event /*:any*/) => {
