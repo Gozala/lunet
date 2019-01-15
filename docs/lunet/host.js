@@ -7,6 +7,7 @@ import * as Data from "./data.js"
 class LunetHost {
   /*::
   ownerDocument:Document
+  registration:ServiceWorkerRegistration
   isConnected:boolean
   status:HTMLElement
   ready:Promise<mixed>
@@ -80,6 +81,7 @@ export const connect = async (
       scope: "./",
       type: "classic"
     })
+    host.registration = registration
 
     setStatus(host, "🎛 Activating local setup")
 
@@ -179,7 +181,8 @@ const decodeRequest = (request /*:Data.RequestData*/) =>
     destination: request.destination,
     integrity: request.integrity,
     redirect: request.redirect,
-    referrer: request.referrer,
+    // Throws on Safari if referrer is different
+    // referrer: request.referrer
     referrerPolicy: request.referrerPolicy
   })
 

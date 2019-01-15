@@ -1,5 +1,9 @@
 // @flow strict
 
+/*::
+import * as Data from "./lunet/data.js"
+*/
+
 const VERSION = "0.0.4"
 const daemonURL = new URL("https://127.0.0.1:9000")
 
@@ -15,6 +19,32 @@ const activate = (event /*:ExtendableEvent*/) => {
   // consider how do we deal with SW updates when former one already has
   // clients.
   event.waitUntil(initialize())
+}
+
+const message = event => {
+  console.log(`Service got a message ${self.registration.scope}`, event)
+  event.waitUntil(receive(event))
+}
+
+const receive = async event => {
+  const { data, target } = event
+  const { request, id } = data
+
+  const response = await respond({ request })
+  const out = await encodeResponse(response)
+
+  const message /*:Data.ResponseMessage*/ = {
+    type: "response",
+    id: event.data.id,
+    response: out
+  }
+
+  console.log(
+    `Host is forwarding response ${id} back to client ${out.url}`,
+    message
+  )
+
+  target.postMessage(message, transfer(out))
 }
 
 const request = (event /*:FetchEvent*/) => {
@@ -76,6 +106,8 @@ const serviceFetch = async ({ request }) => {
     requestHeaders.delete("accept")
     requestHeaders.delete("user-agent")
     requestHeaders.delete("x-requested-with")
+    requestHeaders.delete("cache-control")
+    requestHeaders.delete("pragma")
 
     const body = await encodeBody(request)
 
@@ -149,9 +181,29 @@ const encodeBody = (request /*:Request*/) => {
   }
 }
 
+const encodeResponse = async (
+  response /*:Response*/
+) /*:Promise<Data.ResponseData>*/ => {
+  const body = await response.arrayBuffer()
+  const headers /*:any*/ = [...response.headers.entries()]
+
+  return {
+    url: response.url,
+    body,
+    headers,
+    status: response.status,
+    statusText: response.statusText,
+    redirected: response.redirected,
+    type: response.type
+  }
+}
+
 const updateHost = (url, hostURL) =>
   new URL(`${url.pathname}${url.search}`, hostURL)
+
+const transfer = data => (data.body ? [data.body] : [])
 
 self.addEventListener("install", install)
 self.addEventListener("activate", activate)
 self.addEventListener("fetch", request)
+self.addEventListener("message", message)
