@@ -1,9 +1,9 @@
 // @flow strict
 
-export type RequestData = {
+export type RequestData = {|
   url: string,
   destination: string,
-  body: ?ArrayBuffer,
+  +body: ?ArrayBuffer,
   cache?: CacheType,
   credentials?: CredentialsType,
   headers?: HeadersInit,
@@ -13,8 +13,9 @@ export type RequestData = {
   mode?: ?ModeType,
   redirect?: RedirectType,
   referrer?: string,
-  referrerPolicy?: ReferrerPolicyType
-}
+  referrerPolicy?: ReferrerPolicyType,
+  window?: null
+|}
 
 export type ResponseData = {
   url: string,
@@ -54,3 +55,36 @@ export type Request = {
   target: MessagePort,
   origin: string
 }
+
+export type WorkerInbox = {
+  type: "message",
+  data: WorkerIncomingMessage,
+  ports: MessagePort[],
+  target: MessagePort,
+  origin: string
+}
+
+export type WorkerOutbox = {
+  type: "message",
+  data: WorkerOutgoingMessage,
+  target: MessagePort,
+  origin: string
+}
+
+export type PingMessage = {
+  type: "ping"
+}
+
+export type PongMessage = {
+  type: "pong"
+}
+
+export type WorkerIncomingMessage =
+  | RequestMessage
+  | PingMessage
+  | ResponseMessage
+
+export type WorkerOutgoingMessage =
+  | ResponseMessage
+  | PongMessage
+  | RequestMessage

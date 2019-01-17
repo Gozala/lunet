@@ -1,0 +1,1 @@
+importScripts("./lunet/proxy.js")

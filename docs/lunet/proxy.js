@@ -4,7 +4,9 @@
 import * as Data from "./data.js"
 */
 
-const VERSION = "0.0.3"
+const NAME = "proxy"
+const VERSION = "0.0.6"
+const ID = `${NAME}@${VERSION}`
 const serviceURL = new URL("https://lunet.link/")
 const clientURL = new URL("/lunet/client.js", serviceURL)
 const mountURL = new URL(
@@ -42,10 +44,10 @@ const request = (event /*:FetchEvent*/) => {
 const respond = (event /*:FetchEvent*/) => {
   const url = new URL(event.request.url)
   switch (url.origin) {
-    case self.origin:
-      return localFetch(event)
     case serviceURL.origin:
       return serviceFetch(event)
+    case self.origin:
+      return localFetch(event)
     default:
       return foreignFetch(event)
   }
@@ -73,7 +75,7 @@ const serviceFetch = async event => {
       event.request.url
     }`
   )
-  const cache = await caches.open(VERSION)
+  const cache = await caches.open(ID)
   const response = await cache.match(event.request)
   if (response) {
     return response
@@ -158,6 +160,7 @@ const receive = ({ data, ports, source } /*:Data.Response*/) => {
     case "response": {
       const { id, response } = data
       const pendingRequest = pendingRequests[id]
+      delete pendingRequests[id]
       if (pendingRequest) {
         return pendingRequest(response)
       } else {
@@ -271,10 +274,11 @@ const setup = async () => {
   const skip = self.skipWaiting()
 
   console.log(`Proxy is setting up ${self.registration.scope}`)
-  const cache = await caches.open(VERSION)
+  const cache = await caches.open(ID)
   const urls = [
     clientURL.href,
-    new URL("/", serviceURL).href,
+    new URL("/lunet/", serviceURL).href,
+    new URL("/lunet/worker.js", serviceURL).href,
     new URL("/lunet/host.js", serviceURL).href,
     new URL("/lunet/proxy.js", serviceURL).href
   ]
@@ -293,11 +297,11 @@ const initialize = async () => {
 
   await self.clients.claim()
 
-  const versions = await caches.keys()
-  for (const version of versions) {
-    if (version !== VERSION) {
-      console.log(`Proxy is clearing obsolete cache: ${version}`)
-      await caches.delete(version)
+  const keys = await caches.keys()
+  for (const id of keys) {
+    if (id !== ID && id.startsWith(NAME)) {
+      console.log(`Proxy is clearing obsolete cache: ${id}`)
+      await caches.delete(id)
     }
   }
 

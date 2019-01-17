@@ -49,7 +49,7 @@ export class LunetClient {
     }
   }
   get hostURL() {
-    return getSetting(this, "host", "https://lunet.link/")
+    return getSetting(this, "host", "https://lunet.link/lunet/")
   }
   get serviceURL() {
     return getSetting(this, "service", "./lunet.js")
