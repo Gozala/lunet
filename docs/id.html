@@ -1,0 +1,26 @@
+<html>
+  <head>
+    <title>Peer ID</title>
+  </head>
+  <body style="font: 1rem monospace; white-space:pre;">
+    <script type="module" async>
+      const main = async () => {
+        try {
+          const { searchParams } = new URL(location)
+          const protocol = searchParams.get("protocol") || "http"
+          const host = searchParams.get("host") || "127.0.0.1"
+          const port = searchParams.get("port") || "5001"
+          const path = searchParams.get("path") || "/api/v0/id"
+          const url = `${protocol}://${host}:${port}${path}`
+          const reseponse = await fetch(url)
+          const content = await reseponse.text()
+          document.body.textContent = content
+        } catch (error) {
+          document.body.textContent = error.toString()
+        }
+      }
+
+      main()
+    </script>
+  </body>
+</html>
