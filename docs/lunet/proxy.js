@@ -241,7 +241,7 @@ const noClientFound = (request /*:Request*/) =>
 const findClient = async (id /*:string*/) /*:Promise<?WindowClient>*/ => {
   const client = id != "" ? await self.clients.get(id) : null
   // If request is coming from the specific client than select that client
-  if (client && client.visibilityState === "visible") {
+  if (client) {
     return client
   }
   // Otherwise get all window clients (as only they will have <lunet-link>
