@@ -1,5 +1,7 @@
 // @flow strict
 
+import DaemonClient from "./ipfs/daemon-client.js"
+
 /*::
 import * as Data from "./data.js"
 */
@@ -13,7 +15,7 @@ class LunetHost {
   ready:Promise<mixed>
   handleEvent:Event => mixed
   worker:SharedWorker
-  pendingRequests:{[string]:(Data.ResponseData) => void}
+  pendingRequests:{[string]:(Data.EncodedResponse) => void}
   */
   static new(document) {
     const host = new this(document)
@@ -70,7 +72,10 @@ export const connect = async (
   const window = host.ownerDocument.defaultView
   window.addEventListener("message", host)
   try {
-    const worker = new SharedWorker(`./worker.js`)
+    const worker /*:SharedWorker*/ = new self.SharedWorker(
+      `./ipfs-worker.js`,
+      "IPFS"
+    )
     worker.onerror = error => console.error(error)
     worker.port.addEventListener("message", host)
     worker.port.start()
@@ -164,7 +169,7 @@ const workerRequest = async (host, message) => {
   try {
     const response = await fetch(request.url, {
       method: request.method,
-      headers: request.headers,
+      headers: decodeHeaders(request.headers),
       body: request.body
     })
     const data = await encodeResponse(response)
@@ -188,8 +193,10 @@ export const relay = async (host /*:LunetHost*/, event /*:Data.Request*/) => {
   // const reseponse = await worker.respond(data)
 
   // const out = await encodeResponse(response)
-  host.worker.port.postMessage(data)
+  host.worker.port.postMessage(data, transfer(request))
   const response = await receiveResponse(host, id)
+  // TODO: Make sure that origin of the requesting site is used.
+  response.headers.push(["access-control-allow-origin", "*"])
 
   const message /*:Data.ResponseMessage*/ = {
     type: "response",
@@ -208,8 +215,8 @@ export const relay = async (host /*:LunetHost*/, event /*:Data.Request*/) => {
 const receiveResponse = (
   host /*:LunetHost*/,
   id /*:string*/
-) /*:Promise<Data.ResponseData>*/ =>
-  new Promise((resolve /*:Data.ResponseData => void*/) => {
+) /*:Promise<Data.EncodedResponse>*/ =>
+  new Promise((resolve /*:Data.EncodedResponse => void*/) => {
     host.pendingRequests[id] = resolve
   })
 
@@ -248,9 +255,9 @@ const receiveResponse = (
 //   }
 // }
 
-const decodeRequest = (request /*:Data.RequestData*/) =>
+const decodeRequest = (request /*:Data.EncodedRequest*/) =>
   new Request(request.url, {
-    headers: new Headers(request.headers),
+    headers: decodeHeaders(request.headers),
     body: request.body,
     method: request.method,
     cache: request.cache,
@@ -265,19 +272,22 @@ const decodeRequest = (request /*:Data.RequestData*/) =>
 
 const encodeResponse = async (
   response /*:Response*/
-) /*:Promise<Data.ResponseData>*/ => {
-  const body = await response.arrayBuffer()
-  const headers /*:any*/ = [...response.headers.entries()]
-
+) /*:Promise<Data.EncodedResponse>*/ => {
   return {
     url: response.url,
-    body,
-    headers,
+    body: await response.arrayBuffer(),
+    headers: encodeHeaders(response.headers),
     status: response.status,
     statusText: response.statusText,
     redirected: response.redirected,
     type: response.type
   }
+}
+
+const encodeHeaders = (headers /*:Headers*/) => [...headers.entries()]
+const decodeHeaders = (headers /*:Array<[string, string]>*/) /*:Headers*/ => {
+  const init /*:any*/ = headers
+  return new Headers(init)
 }
 
 const setStatus = (host, status) => {
@@ -301,6 +311,6 @@ export const getSetting = (
 const when = (type, target) =>
   new Promise(resolve => target.addEventListener(type, resolve, { once: true }))
 
-const transfer = data => (data.body ? [data.body] : [])
+const transfer = data => (data.body instanceof ArrayBuffer ? [data.body] : [])
 
 window.main = LunetHost.new(document)

@@ -29,10 +29,10 @@ const respond = async (request, id, target) => {
     const response = await selectFetch(request, id, target)
 
     if (response.url !== request.url) {
-      const headers = new Headers(response.headers)
+      const headers = decodeHeaders(response.headers)
       const location = new URL(response.url)
       headers.set("location", location.href)
-      response.headers = [...headers.entries()]
+      response.headers = encodeHeaders(headers)
       response.status = 302
       return response
     } else {
@@ -58,7 +58,7 @@ const selectFetch = async (request, id, target) => {
 const localFetch = async request => {
   const response = await fetch(request.url, {
     method: request.method,
-    headers: request.headers,
+    headers: decodeHeaders(request.headers),
     body: request.body
   })
 
@@ -70,10 +70,10 @@ const proxyFetch = async (request, id, target) => {
   return await receiveResponse(id)
 }
 
-const pendingRequests /*:{[string]:(Data.ResponseData) => void}*/ = {}
+const pendingRequests /*:{[string]:(Data.EncodedResponse) => void}*/ = {}
 
-const receiveResponse = (id /*:string*/) /*:Promise<Data.ResponseData>*/ =>
-  new Promise((resolve /*:Data.ResponseData => void*/) => {
+const receiveResponse = (id /*:string*/) /*:Promise<Data.EncodedResponse>*/ =>
+  new Promise((resolve /*:Data.EncodedResponse => void*/) => {
     pendingRequests[id] = resolve
   })
 
@@ -124,7 +124,7 @@ const routeService = request => {
   const foreignURL = updateHost(localURL)
   console.log(`Daemon request ${foreignURL.href}`)
 
-  const requestHeaders = new Headers(request.headers)
+  const requestHeaders = decodeHeaders(request.headers)
   requestHeaders.delete("upgrade-insecure-requests")
   requestHeaders.delete("origin")
   requestHeaders.delete("dnt")
@@ -133,10 +133,9 @@ const routeService = request => {
   requestHeaders.delete("x-requested-with")
   requestHeaders.delete("cache-control")
   requestHeaders.delete("pragma")
-  const headers /*:any*/ = [...requestHeaders.entries()]
 
   request.url = foreignURL.href
-  request.headers = headers
+  request.headers = encodeHeaders(requestHeaders)
   return request
 }
 
@@ -166,19 +165,22 @@ const encodeBody = (request /*:Request*/) => {
 
 const encodeResponse = async (
   response /*:Response*/
-) /*:Promise<Data.ResponseData>*/ => {
-  const body = await response.arrayBuffer()
-  const headers /*:any*/ = [...response.headers.entries()]
-
+) /*:Promise<Data.EncodedResponse>*/ => {
   return {
     url: response.url,
-    body,
-    headers,
+    body: await response.arrayBuffer(),
+    headers: encodeHeaders(response.headers),
     status: response.status,
     statusText: response.statusText,
     redirected: response.redirected,
     type: response.type
   }
+}
+
+const encodeHeaders = (headers /*:Headers*/) => [...headers.entries()]
+const decodeHeaders = (headers /*:Array<[string, string]>*/) /*:Headers*/ => {
+  const init /*:any*/ = headers
+  return new Headers(init)
 }
 
 const receive = async (event /*:Data.WorkerInbox*/) => {

@@ -228,7 +228,7 @@ const setStatus = (client, status) => {
 const when = (type, target) =>
   new Promise(resolve => target.addEventListener(type, resolve, { once: true }))
 
-const transfer = data => (data.body ? [data.body] : [])
+const transfer = data => (data.body instanceof ArrayBuffer ? [data.body] : [])
 
 const ensureHead = document =>
   document.head || document.appendChild(document.createElement("head"))

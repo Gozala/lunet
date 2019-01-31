@@ -8,6 +8,7 @@ const NAME = "proxy"
 const VERSION = "0.0.6"
 const ID = `${NAME}@${VERSION}`
 const serviceURL = new URL("https://lunet.link/")
+const daemonURL = new URL("http://127.0.0.1:5001/")
 const clientURL = new URL("/lunet/client.js", serviceURL)
 const mountURL = new URL(
   new URL(location.href).searchParams.get("mount") || "",
@@ -45,6 +46,7 @@ const respond = (event /*:FetchEvent*/) => {
   const url = new URL(event.request.url)
   switch (url.origin) {
     case serviceURL.origin:
+    case daemonURL.origin:
       return serviceFetch(event)
     case self.origin:
       return localFetch(event)
@@ -173,29 +175,28 @@ const receive = ({ data, ports, source } /*:Data.Response*/) => {
   }
 }
 
-const pendingRequests /*:{[string]:(Data.ResponseData) => void}*/ = {}
+const pendingRequests /*:{[string]:(Data.EncodedResponse) => void}*/ = {}
 
-const receiveResponse = (id /*:string*/) /*:Promise<Data.ResponseData>*/ =>
-  new Promise((resolve /*:Data.ResponseData => void*/) => {
+const receiveResponse = (id /*:string*/) /*:Promise<Data.EncodedResponse>*/ =>
+  new Promise((resolve /*:Data.EncodedResponse => void*/) => {
     pendingRequests[id] = resolve
   })
 
 const encodeRequest = async (
   request /*:Request*/
-) /*:Promise<Data.RequestData>*/ => {
+) /*:Promise<Data.EncodedRequest>*/ => {
   const body = await encodeBody(request)
   const url = request.url.startsWith(self.registration.scope)
     ? `${mountURL.href}${request.url.substr(self.registration.scope.length)}`
     : request.url
   const $request /*:Object*/ = request
-  const headers /*:any*/ = [...request.headers.entries()]
   const mode = String(request.mode) === "navigate" ? null : request.mode
   const cache = request.cache === "only-if-cached" ? "default" : request.cache
 
   return {
     url,
     body,
-    headers,
+    headers: encodeHeaders(request.headers),
     mode,
     cache,
     method: request.method,
@@ -208,11 +209,11 @@ const encodeRequest = async (
   }
 }
 
-const decodeResponse = (response /*:Data.ResponseData*/) /*:Response*/ => {
+const decodeResponse = (response /*:Data.EncodedResponse*/) /*:Response*/ => {
   return new Response(response.body, {
     status: response.status,
     statusText: response.statusText,
-    headers: new Headers(response.headers)
+    headers: decodeHeaders(response.headers)
   })
 }
 
@@ -224,6 +225,12 @@ const encodeBody = (request /*:Request*/) => {
     default:
       return request.arrayBuffer()
   }
+}
+
+const encodeHeaders = (headers /*:Headers*/) => [...headers.entries()]
+const decodeHeaders = (headers /*:Array<[string, string]>*/) /*:Headers*/ => {
+  const init /*:any*/ = headers
+  return new Headers(init)
 }
 
 const noClientFound = (request /*:Request*/) =>
@@ -308,7 +315,7 @@ const initialize = async () => {
   console.log("Proxy activation is complete")
 }
 
-const transfer = data => (data.body ? [data.body] : [])
+const transfer = data => (data.body instanceof ArrayBuffer ? [data.body] : [])
 
 self.addEventListener("install", install)
 self.addEventListener("activate", activate)

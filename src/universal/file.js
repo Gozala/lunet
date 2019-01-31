@@ -2,6 +2,7 @@
 
 const { resolve, join, basename, dirname } = require("path")
 const { stat, open, read, write } = require("fs").promises
+const { createReadStream } = require("fs")
 const { Buffer } = require("buffer")
 
 /*::
@@ -67,6 +68,9 @@ export class File extends FileBlob {
       }
       throw error
     }
+  }
+  async readAsStream() /*:any*/ {
+    return createReadStream(this.url.pathname)
   }
 }
 

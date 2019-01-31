@@ -39,7 +39,7 @@ const request = async request => {
 
   try {
     const file = await File.fromURL(url)
-    const content = await file.readAsText()
+    const content = await file.readAsStream()
     request.respond(
       new Response(content, {
         status: 200,

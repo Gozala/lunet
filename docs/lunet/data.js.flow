@@ -1,12 +1,14 @@
 // @flow strict
 
-export type RequestData = {|
+export type Body = null | string | ArrayBuffer | Object
+
+export type EncodedRequest = {|
   url: string,
   destination: string,
-  +body: ?ArrayBuffer,
+  body: Body,
   cache?: CacheType,
   credentials?: CredentialsType,
-  headers?: HeadersInit,
+  headers: Array<[string, string]>,
   integrity?: string,
   keepalive?: boolean,
   method?: string,
@@ -17,28 +19,28 @@ export type RequestData = {|
   window?: null
 |}
 
-export type ResponseData = {
+export type EncodedResponse = {
   url: string,
-  body: ArrayBuffer,
+  body: Body,
   status: number,
   statusText: string,
-  headers: HeadersInit,
+  headers: Array<[string, string]>,
   redirected: boolean,
   type: ResponseType
 }
 
-type Transferable = ArrayBuffer | MessagePort | ImageBitmap
+type Transferable = ArrayBuffer | MessagePort | ImageBitmap | null
 
 export type RequestMessage = {
   type: "request",
   id: string,
-  request: RequestData
+  request: EncodedRequest
 }
 
 export type ResponseMessage = {
   type: "response",
   id: string,
-  response: ResponseData
+  response: EncodedResponse
 }
 
 export type Response = {
