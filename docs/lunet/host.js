@@ -1,7 +1,5 @@
 // @flow strict
 
-import DaemonClient from "./ipfs/daemon-client.js"
-
 /*::
 import * as Data from "./data.js"
 */
@@ -72,10 +70,7 @@ export const connect = async (
   const window = host.ownerDocument.defaultView
   window.addEventListener("message", host)
   try {
-    const worker /*:SharedWorker*/ = new self.SharedWorker(
-      `./ipfs-worker.js`,
-      "IPFS"
-    )
+    const worker /*:SharedWorker*/ = new self.SharedWorker(`./ipfs.js`, "IPFS")
     worker.onerror = error => console.error(error)
     worker.port.addEventListener("message", host)
     worker.port.start()

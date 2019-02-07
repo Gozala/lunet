@@ -61,7 +61,6 @@ export type Request = {
 export type WorkerInbox = {
   type: "message",
   data: WorkerIncomingMessage,
-  ports: MessagePort[],
   target: MessagePort,
   origin: string
 }
