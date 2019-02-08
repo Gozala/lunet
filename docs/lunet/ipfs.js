@@ -134,7 +134,7 @@ class NativeClientNode {
       this.request = this.localRequest
       return value
     } catch (error) {
-      const value = this.proxyRequest(request, port)
+      const value = await this.proxyRequest(request, port)
       this.request = this.proxyRequest
       return value
     }
@@ -144,7 +144,7 @@ class NativeClientNode {
     port,
     origin
   ) /*:Promise<Data.EncodedResponse>*/ {
-    request.url = this.route(new URL(request.url)).href
+    const route = this.routeReuqest(request)
     const response = await fetch(request.url, {
       method: request.method,
       headers: decodeHeaders(request.headers),
@@ -154,9 +154,26 @@ class NativeClientNode {
     return await encodeResponse(response, request.url)
   }
   async proxyRequest({ request, id } /*:Data.RequestMessage*/, port, origin) {
-    request.url = this.route(new URL(request.url)).href
-    port.postMessage({ type: "request", id, request }, transfer(request))
+    const route = this.routeReuqest(request)
+    port.postMessage({ type: "request", id, request: route }, transfer(route))
     return this.response(id)
+  }
+  routeReuqest(request) {
+    const url = this.route(new URL(request.url))
+
+    const headers = decodeHeaders(request.headers)
+    headers.delete("upgrade-insecure-requests")
+    headers.delete("origin")
+    headers.delete("dnt")
+    headers.delete("accept")
+    headers.delete("user-agent")
+    headers.delete("x-requested-with")
+    headers.delete("cache-control")
+    headers.delete("pragma")
+
+    request.url = url.href
+    request.headers = encodeHeaders(headers)
+    return request
   }
   route(url) /*:URL*/ {
     const [, base] = url.pathname.split("/")
