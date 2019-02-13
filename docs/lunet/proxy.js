@@ -5,7 +5,7 @@ import * as Data from "./data.js"
 */
 
 const NAME = "proxy"
-const VERSION = "0.0.6"
+const VERSION = "0.0.7"
 const ID = `${NAME}@${VERSION}`
 const serviceURL = new URL("https://lunet.link/")
 const daemonURL = new URL("http://127.0.0.1:5001/")
@@ -241,7 +241,7 @@ const noClientFound = (request /*:Request*/) =>
 const findClient = async (id /*:string*/) /*:Promise<?WindowClient>*/ => {
   const client = id != "" ? await self.clients.get(id) : null
   // If request is coming from the specific client than select that client
-  if (client && client.visibilityState === "visible") {
+  if (client) {
     return client
   }
   // Otherwise get all window clients (as only they will have <lunet-link>
@@ -283,9 +283,8 @@ const setup = async () => {
   console.log(`Proxy is setting up ${self.registration.scope}`)
   const cache = await caches.open(ID)
   const urls = [
-    clientURL.href,
     new URL("/lunet/", serviceURL).href,
-    new URL("/lunet/worker.js", serviceURL).href,
+    new URL("/lunet/client.js", serviceURL).href,
     new URL("/lunet/host.js", serviceURL).href,
     new URL("/lunet/proxy.js", serviceURL).href
   ]

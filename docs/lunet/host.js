@@ -1,7 +1,5 @@
 // @flow strict
 
-import DaemonClient from "./ipfs/daemon-client.js"
-
 /*::
 import * as Data from "./data.js"
 */
@@ -14,8 +12,7 @@ class LunetHost {
   status:HTMLElement
   ready:Promise<mixed>
   handleEvent:Event => mixed
-  worker:SharedWorker
-  pendingRequests:{[string]:(Data.EncodedResponse) => void}
+  service:IPFSService
   */
   static new(document) {
     const host = new this(document)
@@ -29,231 +26,64 @@ class LunetHost {
       body.appendChild(status)
     }
 
-    this.pendingRequests = {}
     this.status = status
     this.isConnected = true
     this.connectedCallback()
   }
   connectedCallback() {
     if (this.isConnected) {
-      const { serviceWorker } = navigator
-      if (serviceWorker) {
-        connect(
-          this,
-          serviceWorker
-        )
-      } else {
-        setStatus(this, "🚫 Service workers are not unavailable")
-      }
+      this.ready = this.activate()
     }
   }
   disconnectedCallback() {}
   handleEvent(event) {
     switch (event.type) {
       case "message": {
-        return receive(this, event)
+        return this.receive(event)
       }
     }
   }
-  get service() {
-    const serviceWorker = navigator.serviceWorker
-    return serviceWorker ? serviceWorker.controller : null
-  }
-  get mount() {
-    return getSetting(this, "mount", "")
-  }
-}
-
-export const connect = async (
-  host /*:LunetHost*/,
-  serviceWorker /*:ServiceWorkerContainer*/
-) => {
-  console.log("Host is connecting")
-  const window = host.ownerDocument.defaultView
-  window.addEventListener("message", host)
-  try {
-    const worker /*:SharedWorker*/ = new self.SharedWorker(
-      `./ipfs-worker.js`,
-      "IPFS"
-    )
-    worker.onerror = error => console.error(error)
-    worker.port.addEventListener("message", host)
-    worker.port.start()
-
-    host.worker = worker
-
-    // setStatus(host, "⚙️ Setting things up, to serve you even without interent.")
-
-    // const serviceURL = new URL("./service.js", window.location.href)
-    // // Uses the scope of the page it's served from.
-
-    // const ready = serviceWorker.controller
-    //   ? Promise.resolve(serviceWorker.controller)
-    //   : when("controllerchange", serviceWorker)
-    // host.ready = ready
-
-    // console.log(`Host is registering service worker ${serviceURL.href}`)
-
-    // const registration = await serviceWorker.register(serviceURL.href, {
-    //   scope: "./",
-    //   type: "classic"
-    // })
-    // host.registration = registration
-
-    // setStatus(host, "🎛 Activating local setup")
-
-    // await ready
-    // console.log(`Host is controlled ${serviceURL.href}`, registration)
-    // setStatus(host, "🛰 All set!")
-
-    // if (window.top === window) {
-    //   const service = await host.service
-    //   setStatus(host, "🎉 Loading dashboard!")
-    //   await activate(host)
-    // } else {
-    // history.replaceState(null, "", new URL("/", location.href).href)
-    // }
-  } catch (error) {
-    setStatus(host, `☹️ Ooops, Something went wrong ${error}`)
-  }
-}
-
-export const receive = (host /*:LunetHost*/, event /*:any*/) => {
-  if (event.target instanceof MessagePort) {
-    if (event.target === host.worker.port) {
-      receiveWorkerMessage(host, event)
+  receive(event /*:any*/) {
+    if (event.target instanceof MessagePort) {
+      this.relay(event)
     } else {
-      relay(host, event)
+      this.connect(event.ports[0])
     }
-  } else {
+  }
+  connect(port) {
     console.log(`Host received a port from the client`)
-    const [port] = event.ports
     if (port) {
-      port.addEventListener("message", host)
+      port.addEventListener("message", this)
       port.start()
     }
   }
-}
+  async relay(event /*:Data.Request*/) {
+    const { data, target, origin } = event
+    await this.ready
+    const message = await this.service.relay(data)
 
-const receiveWorkerMessage = (
-  host /*:LunetHost*/,
-  event /*:Data.WorkerOutbox*/
-) => {
-  const { data: message, target } = event
-  switch (message.type) {
-    case "pong": {
-      return target.postMessage({ type: "ping" })
+    console.log(
+      `Host is forwarding response ${data.id} back to client ${
+        message.response.url
+      }`,
+      message
+    )
+
+    target.postMessage(message, transfer(message.response))
+  }
+  async activate() {
+    console.log("Host is connecting")
+    const window = this.ownerDocument.defaultView
+    window.addEventListener("message", this)
+    try {
+      const params = new URLSearchParams(location.search)
+      const service = await IPFSService.spawn(params)
+      this.service = service
+    } catch (error) {
+      setStatus(this, `☹️ Ooops, Something went wrong ${error}`)
     }
-    case "response": {
-      return workerResponse(host, message)
-    }
-    case "request": {
-      return workerRequest(host, message)
-    }
   }
 }
-
-const workerResponse = (host, message) => {
-  const { id, response } = message
-  const pendingRequest = host.pendingRequests[id]
-  delete pendingRequest[id]
-  if (pendingRequest) {
-    pendingRequest(response)
-  } else {
-    console.warn("Received response for unrecognized request")
-  }
-}
-
-const workerRequest = async (host, message) => {
-  const { id, request } = message
-  try {
-    const response = await fetch(request.url, {
-      method: request.method,
-      headers: decodeHeaders(request.headers),
-      body: request.body
-    })
-    const data = await encodeResponse(response)
-    host.worker.port.postMessage({ type: "response", id, response: data })
-  } catch (error) {
-    const reseponse = new Response(error.toString(), {
-      status: 500
-    })
-    const data = await encodeResponse(reseponse)
-    host.worker.port.postMessage({ type: "response", id, response: data })
-  }
-}
-
-export const relay = async (host /*:LunetHost*/, event /*:Data.Request*/) => {
-  const { data, target, origin } = event
-  const { request, id } = data
-
-  await host.ready
-  console.log(`Host is relaying request ${id} to daemon ${request.url}`)
-  // const response = await fetch(decodeRequest(request))
-  // const reseponse = await worker.respond(data)
-
-  // const out = await encodeResponse(response)
-  host.worker.port.postMessage(data, transfer(request))
-  const response = await receiveResponse(host, id)
-  // TODO: Make sure that origin of the requesting site is used.
-  response.headers.push(["access-control-allow-origin", "*"])
-
-  const message /*:Data.ResponseMessage*/ = {
-    type: "response",
-    id,
-    response
-  }
-
-  console.log(
-    `Host is forwarding response ${id} back to client ${response.url}`,
-    message
-  )
-
-  target.postMessage(message, transfer(response))
-}
-
-const receiveResponse = (
-  host /*:LunetHost*/,
-  id /*:string*/
-) /*:Promise<Data.EncodedResponse>*/ =>
-  new Promise((resolve /*:Data.EncodedResponse => void*/) => {
-    host.pendingRequests[id] = resolve
-  })
-
-// const activate = async host => {
-//   const document = host.ownerDocument
-//   // Once SW is ready we load "control panel" UI by fetching it from SW.
-//   const response = await fetch(host.mount)
-//   const content = await response.text()
-
-//   const parser = new DOMParser()
-//   const { documentElement } = parser.parseFromString(content, "text/html")
-
-//   const root = documentElement
-//     ? document.adoptNode(documentElement)
-//     : document.createElement("html")
-
-//   const scripts = [...root.querySelectorAll("script")]
-//   for (const source of scripts) {
-//     const script = document.createElement("script")
-//     for (const { name, value, namespaceURI } of source.attributes) {
-//       if (namespaceURI) {
-//         script.setAttributeNS(namespaceURI, name, value)
-//       } else {
-//         script.setAttribute(name, value)
-//       }
-//     }
-//     source.replaceWith(script)
-//   }
-
-//   history.pushState(null, "", response.url)
-
-//   if (document.documentElement) {
-//     document.documentElement.replaceWith(root)
-//   } else {
-//     document.appendChild(root)
-//   }
-// }
 
 const decodeRequest = (request /*:Data.EncodedRequest*/) =>
   new Request(request.url, {
@@ -294,23 +124,172 @@ const setStatus = (host, status) => {
   host.status.textContent = status
 }
 
-export const getSetting = (
-  host /*:LunetHost*/,
-  name /*:string*/,
-  fallback /*:string*/ = ""
-) /*:string*/ => {
-  const meta = host.ownerDocument.querySelector(`meta[name=${name}]`)
-  const value = meta ? meta.getAttribute("content") : null
-  if (value != null && value !== "") {
-    return value
-  } else {
-    return fallback
-  }
-}
-
 const when = (type, target) =>
   new Promise(resolve => target.addEventListener(type, resolve, { once: true }))
 
 const transfer = data => (data.body instanceof ArrayBuffer ? [data.body] : [])
+
+class IPFSService {
+  /*::
+  handleEvent: Event => mixed
+  port:ServiceWorker|MessagePort
+  pendingRequests:{[string]:(Data.EncodedResponse) => void}
+  */
+  static spawn(params) {
+    if (self.SharedWorker && params.get("use-sw") == null) {
+      return IPFSSharedWorker.IPFSSharedWorker(self.SharedWorker, params)
+    } else if (navigator.serviceWorker) {
+      return IPFSServiceWorker.ServiceWorker(navigator.serviceWorker, params)
+    } else {
+      throw Error("Runtime does not provide `SharedWorker` nor `ServiceWorker`")
+    }
+  }
+  constructor() {
+    this.pendingRequests = {}
+  }
+  receive(event /*:Data.WorkerOutbox*/) {
+    const { data: message, target } = event
+    switch (message.type) {
+      case "pong": {
+        return this.pong()
+      }
+      case "response": {
+        return this.response(message)
+      }
+      case "request": {
+        return this.request(message)
+      }
+    }
+  }
+  response(message) {
+    const { id, response } = message
+    const pendingRequest = this.pendingRequests[id]
+    delete pendingRequest[id]
+    if (pendingRequest) {
+      pendingRequest(response)
+    } else {
+      console.warn("Received response for unrecognized request")
+    }
+  }
+  respond(id /*:string*/) /*:Promise<Data.EncodedResponse>*/ {
+    return new Promise((resolve /*:Data.EncodedResponse => void*/) => {
+      this.pendingRequests[id] = resolve
+    })
+  }
+  async request(message) {
+    const { id, request } = message
+    try {
+      const response = await fetch(request.url, {
+        method: request.method,
+        headers: decodeHeaders(request.headers),
+        body: request.body
+      })
+      const data = await encodeResponse(response)
+      this.postMessage({ type: "response", id, response: data }, transfer(data))
+    } catch (error) {
+      const reseponse = new Response(error.toString(), {
+        status: 500
+      })
+      const data = await encodeResponse(reseponse)
+      this.postMessage({ type: "response", id, response: data }, transfer(data))
+    }
+  }
+  async relay(
+    data /*:Data.RequestMessage*/
+  ) /*:Promise<Data.ResponseMessage>*/ {
+    const { request, id } = data
+
+    // const response = await fetch(decodeRequest(request))
+    // const reseponse = await worker.respond(data)
+
+    // const out = await encodeResponse(response)
+    this.postMessage(data, transfer(request))
+    const response = await this.respond(id)
+    // TODO: Make sure that origin of the requesting site is used.
+    response.headers.push(["access-control-allow-origin", "*"])
+
+    const message /*:Data.ResponseMessage*/ = {
+      type: "response",
+      id,
+      response
+    }
+
+    return message
+  }
+  pong() {}
+  handleEvent(event) {
+    switch (event.type) {
+      case "message": {
+        return this.receive(event)
+      }
+    }
+  }
+  postMessage(message, transfer /*:any*/) {
+    this.port.postMessage(message, transfer)
+  }
+}
+
+class IPFSSharedWorker extends IPFSService {
+  /*::
+  worker:SharedWorker
+  port:ServiceWorker|MessagePort
+  */
+  static async IPFSSharedWorker(Worker, params) {
+    const service = new this()
+    const worker /*:SharedWorker*/ = new Worker(
+      `./ipfs.js?${params.toString()}`,
+      "IPFS"
+    )
+    worker.onerror = error => console.error(error)
+    worker.port.addEventListener("message", service)
+    worker.port.start()
+
+    service.worker = worker
+    service.port = worker.port
+    return service
+  }
+}
+
+class IPFSServiceWorker extends IPFSService {
+  /*::
+  port:ServiceWorker|MessagePort
+  */
+  static async ServiceWorker(
+    serviceWorker /*:ServiceWorkerContainer*/,
+    params
+  ) {
+    const service = new this()
+    serviceWorker.addEventListener("message", service)
+
+    const scope = new URL("./worker/", location.href).href
+
+    let registration = await serviceWorker.getRegistration(scope)
+    if (registration == null) {
+      registration = await serviceWorker.register(
+        `./ipfs.js?${params.toString()}`,
+        {
+          scope,
+          type: "classic"
+        }
+      )
+    }
+
+    const maybeWorker /*:any*/ =
+      registration.active || registration.waiting || registration.installing
+    const worker /*:ServiceWorker*/ = maybeWorker
+
+    service.port = worker
+
+    service.ping()
+
+    return service
+  }
+  ping() {
+    this.port.postMessage({ type: "ping" })
+  }
+  pong() {
+    this.ping()
+  }
+}
 
 window.main = LunetHost.new(document)
