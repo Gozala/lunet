@@ -7,6 +7,7 @@ import * as Data from "./data.js"
 export class LunetClient {
   /*::
   ownerDocument:Document
+  params:URLSearchParams
   host:HTMLIFrameElement
   status:HTMLElement
   isConnected:boolean
@@ -24,6 +25,7 @@ export class LunetClient {
     const status = this.ownerDocument.createElement("span")
 
     this.status = status
+    this.params = new URLSearchParams(ownerDocument.location.search)
     this.isConnected = true
     this.connectedCallback()
   }
@@ -49,7 +51,8 @@ export class LunetClient {
     }
   }
   get hostURL() {
-    return getSetting(this, "host", "https://lunet.link/lunet/")
+    const search = location.search
+    return getSetting(this, "host", `https://lunet.link/lunet/${search}`)
   }
   get serviceURL() {
     return getSetting(this, "service", "./lunet.js")
@@ -59,6 +62,9 @@ export class LunetClient {
   }
   get mount() {
     return getSetting(this, "mount", "")
+  }
+  get serviceWorkerVersion() {
+    return this.params.get("sw-version")
   }
   get service() {
     const serviceWorker = navigator.serviceWorker
@@ -70,8 +76,10 @@ export const connect = async (
   client /*:LunetClient*/,
   serviceWorker /*:ServiceWorkerContainer*/
 ) => {
-  const { mount, serviceURL, hostURL, scope } = client
-  const src = `${serviceURL}?mount=${mount}`
+  const { mount, serviceURL, hostURL, scope, serviceWorkerVersion } = client
+  const swv = serviceWorkerVersion ? `&swv=${serviceWorkerVersion}` : ""
+
+  const src = `${serviceURL}?mount=${mount}${swv}`
   const { port1, port2 } = new MessageChannel()
   port1.addEventListener("message", client)
   serviceWorker.addEventListener("message", client)

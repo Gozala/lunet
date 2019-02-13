@@ -8,22 +8,39 @@ class SupervisorNode {
   /*::
   nativeNode:NativeClientNode
   browserNode:BrowserNode
+  params:URLSearchParams
   */
-  static new() {
-    return new this()
+  static new(params) {
+    return new this(params)
   }
-  constructor() {
-    this.nativeNode = NativeClientNode.new()
-    this.browserNode = BrowserNode.new()
+  constructor(params /*:URLSearchParams*/) {
+    this.params = params
+    this.nativeNode = NativeClientNode.new(params)
+    this.browserNode = BrowserNode.new(params)
     self.addEventListener("connect", this)
+    self.addEventListener("message", this)
+    self.addEventListener("activate", this)
   }
   handleEvent(event) {
     switch (event.type) {
       case "connect": {
         return this.connect(event)
       }
+      case "activate": {
+        return self.skipWaiting()
+      }
       default: {
-        return this.receive(event)
+        if (event.waitUntil) {
+          const message /*:any*/ = {
+            data: event.data,
+            origin: event.origin,
+            target: event.source
+          }
+          const response = this.receive(message)
+          event.waitUntil(response)
+        } else {
+          this.receive(event)
+        }
       }
     }
   }
@@ -53,11 +70,13 @@ class SupervisorNode {
       }
     }
   }
-  ping(data, port, origin) {
+  async ping(data, port, origin) {
+    await sleep(1000)
     port.postMessage({ type: "pong", time: Date.now() })
   }
   respond(data, port, origin) {
     this.nativeNode.respond(data, port, origin)
+
     this.browserNode.respond(data, port, origin)
   }
   async request(request, port, origin) {
@@ -66,10 +85,14 @@ class SupervisorNode {
 
     try {
       const response = await native
-      port.postMessage(
-        { type: "response", id: request.id, response },
-        transfer(response)
-      )
+      if (response.status === 200) {
+        port.postMessage(
+          { type: "response", id: request.id, response },
+          transfer(response)
+        )
+      } else {
+        throw response
+      }
     } catch (error) {
       const response = await browser
       port.postMessage(
@@ -85,6 +108,7 @@ const GATEWAY_URL = new URL("http://127.0.0.1:8080")
 
 class NativeClientNode {
   /*::
+  params:URLSearchParams
   selectedFetch:"local"|"proxy"|null
   pendingRequests:{[string]:(Data.EncodedResponse) => void}
   request:(Data.RequestMessage, MessagePort, string) => Promise<Data.EncodedResponse>
@@ -92,10 +116,11 @@ class NativeClientNode {
   onready:() => void
   onerror:(Error) => void
   */
-  static new() {
-    return new this()
+  static new(params) {
+    return new this(params)
   }
-  constructor() {
+  constructor(params) {
+    this.params = params
     this.selectedFetch = null
     this.pendingRequests = {}
     this.ready = new Promise((resolve, reject) => {
@@ -104,38 +129,40 @@ class NativeClientNode {
     })
   }
   async connect(connection) {
-    // try {
-    //   const value = await this.request(
-    //     {
-    //       type: "request",
-    //       id: "init",
-    //       request: {
-    //         url: new URL("/api/v0/id", DAEMON_URL).href,
-    //         destination: "",
-    //         body: null,
-    //         headers: []
-    //       }
-    //     },
-    //     connection.target,
-    //     connection.origin
-    //   )
-    //   this.onready()
-    // } catch (error) {
-    //   this.onerror(error)
-    // }
+    try {
+      const value = await this.request(
+        {
+          type: "request",
+          id: "init",
+          request: {
+            url: new URL("/api/v0/id", DAEMON_URL).href,
+            destination: "",
+            body: null,
+            headers: []
+          }
+        },
+        connection.target,
+        connection.origin
+      )
+      this.onready()
+    } catch (error) {
+      this.onerror(error)
+    }
   }
   async request(
     request /*:Data.RequestMessage*/,
     port /*:MessagePort*/,
     origin /*:string*/
   ) /*:Promise<Data.EncodedResponse>*/ {
+    if (this.params.get("native") === "0") {
+      throw Error("Native node is disabled")
+    }
+
     try {
       const value = await this.localRequest(request, port, origin)
-      this.request = this.localRequest
       return value
     } catch (error) {
       const value = await this.proxyRequest(request, port)
-      this.request = this.proxyRequest
       return value
     }
   }
@@ -207,6 +234,7 @@ class NativeClientNode {
 
 class BrowserNode {
   /*::
+  params:URLSearchParams
   daemon:*
   gateway:*
   ready:Promise<void>
@@ -215,15 +243,16 @@ class BrowserNode {
   CID:*
   dagPB:*
   */
-  static new() {
-    return new this()
+  static new(params) {
+    return new this(params)
   }
-  constructor() {
+  constructor(params) {
     self.window = self
     importScripts("unpkg.com/ipfs/dist/index.js")
     importScripts("unpkg.com/ipfs-http-response/dist/index.js")
     importScripts("unpkg.com/tar-stream/dist/index.js")
 
+    this.params = params
     const daemon = new self.Ipfs()
     this.daemon = daemon
     this.gateway = self.IpfsHttpResponse
@@ -241,6 +270,10 @@ class BrowserNode {
     port /*:MessagePort*/,
     origin /*:string*/
   ) /*:Promise<Data.EncodedResponse>*/ {
+    if (this.params.get("in-browser") === "0") {
+      throw Error("Browser node is disabled")
+    }
+
     return BrowserNode.request(this, request.request, port, origin)
   }
   respond(response, port, origin) {}
@@ -1055,4 +1088,6 @@ const once = type => target =>
   new Promise(resolve => target.once(type, resolve))
 const onready = once("ready")
 
-SupervisorNode.new()
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
+
+SupervisorNode.new(new URLSearchParams(location.search))
