@@ -18,6 +18,8 @@ const main = async port => {
       "DNS:localhost",
       "DNS:lunet.link",
       "DNS:*.lunet.link",
+      "DNS:celestial.link",
+      "DNS:*.celestial.link",
       "IP:127.0.0.1",
       "IP:0.0.0.0",
       "IP:::1",
@@ -32,10 +34,14 @@ const main = async port => {
 
 const request = async request => {
   const requestURL = new URL(request.url)
-  const path = `./docs${requestURL.pathname}`
+  const base = requestURL.host.endsWith("celestial.link")
+    ? `./docs/celestial`
+    : `./docs`
+
+  const path = `${base}${requestURL.pathname}`
   const url = new URL(path.endsWith("/") ? `${path}index.html` : path, baseURL)
 
-  console.log(url)
+  console.log(requestURL)
 
   try {
     const file = await File.fromURL(url)
@@ -50,16 +56,17 @@ const request = async request => {
       })
     )
   } catch (error) {
+    const url = new URL(`${base}/404.html`, baseURL)
+    const file = await File.fromURL(url)
+    const content = await file.readAsStream()
     request.respond(
-      new Response(
-        `<html><head><meta charset="UTF-8" /></script></head><body><h1>Not Found</h1><pre>${error}</pre></body></html>`,
-        {
-          status: 404,
-          headers: {
-            "Content-Type": "text/html"
-          }
+      new Response(content, {
+        status: 404,
+        headers: {
+          "Content-Type": mime.lookup(url.pathname),
+          "Access-Control-Allow-Origin": "*"
         }
-      )
+      })
     )
   }
 }

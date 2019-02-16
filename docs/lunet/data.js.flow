@@ -16,9 +16,32 @@ export type EncodedRequest = {|
   redirect?: RedirectType,
   referrer?: string,
   referrerPolicy?: ReferrerPolicyType,
-  window?: null
+  window?: null,
+
+  port?: MessagePort
 |}
 
+// type ResponseMessage = { data: ResponseData }
+
+export type ResponseData = ResponseHead | ResponseBody | ResponseCancel
+type ResponseHead = {
+  type: "head",
+  head: {
+    status: number,
+    statusText: string,
+    headers: Array<[string, string]>
+  }
+}
+type ResponseBody = {
+  type: "body",
+  body: ?ArrayBuffer,
+  done: boolean
+}
+
+type ResponseCancel = {
+  type: "cancel",
+  cancel?: any
+}
 export type EncodedResponse = {
   url: string,
   body: Body,
@@ -31,16 +54,16 @@ export type EncodedResponse = {
 
 type Transferable = ArrayBuffer | MessagePort | ImageBitmap | null
 
-export type RequestMessage = {
-  type: "request",
-  id: string,
-  request: EncodedRequest
-}
-
 export type ResponseMessage = {
   type: "response",
   id: string,
   response: EncodedResponse
+}
+
+export type RequestMessage = {
+  type: "request",
+  id: string,
+  request: EncodedRequest
 }
 
 export type Response = {

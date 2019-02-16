@@ -1,7 +1,7 @@
 // @flow strict
 
 /*::
-import * as Data from "./data.js"
+import * as Data from "./lunet/data.js"
 */
 
 export class LunetHost {
@@ -44,11 +44,18 @@ export class LunetHost {
     }
   }
   receive(event /*:any*/) {
-    if (event.target instanceof MessagePort) {
-      this.relay(event)
-    } else {
-      this.connect(event.ports[0])
+    const { data, ports } = event
+    switch (data.type) {
+      case "connect": {
+        return this.connect(...ports)
+      }
+      case "request": {
+        return this.request(event)
+      }
     }
+  }
+  request(event /*:Data.Request*/) {
+    return this.relay(event)
   }
   connect(port /*:MessagePort*/) {
     console.log(`Host received a port from the client`)
@@ -58,9 +65,11 @@ export class LunetHost {
     }
   }
   async relay(event /*:Data.Request*/) {
-    const { data, target, origin } = event
+    const { data, target } = event
     await this.ready
-    const message = await this.service.relay(data)
+
+    const request = this.route(data.request)
+    const message = await this.service.relay({ ...data, request })
 
     console.log(
       `Host is forwarding response ${data.id} back to client ${
@@ -70,6 +79,28 @@ export class LunetHost {
     )
 
     target.postMessage(message, transfer(message.response))
+  }
+  route(request /*:Data.EncodedRequest*/) /*:Data.EncodedRequest*/ {
+    return request
+  }
+  async fetch(
+    url /*:URL|string*/,
+    options /*:?Data.EncodedRequest*/
+  ) /*:Promise<Response>*/ {
+    await this.ready
+    const { response } = await this.service.relay({
+      type: "request",
+      id: Math.random()
+        .toString(36)
+        .substr(2),
+      request: { url: url.toString(), ...(options || {}) }
+    })
+
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: decodeHeaders(response.headers)
+    })
   }
   async activate() {
     console.log("Host is connecting")
@@ -134,6 +165,7 @@ class IPFSService {
   handleEvent: Event => mixed
   port:ServiceWorker|MessagePort
   pendingRequests:{[string]:(Data.EncodedResponse) => void}
+  fetch:typeof fetch
   */
   static spawn(params) {
     if (self.SharedWorker && params.get("use-sw") == null) {
@@ -144,8 +176,18 @@ class IPFSService {
       throw Error("Runtime does not provide `SharedWorker` nor `ServiceWorker`")
     }
   }
+  static Fetch() {
+    const sandbox = document.createElement("iframe")
+    sandbox.name = "fetch"
+    sandbox.setAttribute("sandbox", "allow-scripts allow-same-origin")
+    sandbox.setAttribute("srcdoc", "")
+    const root = document.head || document
+    root.appendChild(sandbox)
+    return sandbox.contentWindow.fetch
+  }
   constructor() {
     this.pendingRequests = {}
+    this.fetch = IPFSService.Fetch()
   }
   receive(event /*:Data.WorkerOutbox*/) {
     const { data: message, target } = event
@@ -179,7 +221,7 @@ class IPFSService {
   async request(message) {
     const { id, request } = message
     try {
-      const response = await fetch(request.url, {
+      const response = await this.fetch(request.url, {
         method: request.method,
         headers: decodeHeaders(request.headers),
         body: request.body
@@ -237,7 +279,7 @@ class IPFSSharedWorker extends IPFSService {
   static async IPFSSharedWorker(Worker, params) {
     const service = new this()
     const worker /*:SharedWorker*/ = new Worker(
-      `./ipfs.js?${params.toString()}`,
+      `/lunet/ipfs.js?${params.toString()}`,
       "IPFS"
     )
     worker.onerror = error => console.error(error)
@@ -261,12 +303,12 @@ class IPFSServiceWorker extends IPFSService {
     const service = new this()
     serviceWorker.addEventListener("message", service)
 
-    const scope = new URL("./worker/", location.href).href
+    const scope = new URL("/lunet/worker/", location.href).href
 
     let registration = await serviceWorker.getRegistration(scope)
     if (registration == null) {
       registration = await serviceWorker.register(
-        `./ipfs.js?${params.toString()}`,
+        `/lunet/ipfs.js?${params.toString()}`,
         {
           scope,
           type: "classic"
@@ -291,5 +333,3 @@ class IPFSServiceWorker extends IPFSService {
     this.ping()
   }
 }
-
-window.main = LunetHost.new(document)
