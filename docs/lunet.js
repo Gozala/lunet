@@ -183,7 +183,7 @@ class IPFSService {
     sandbox.setAttribute("srcdoc", "")
     const root = document.head || document
     root.appendChild(sandbox)
-    return sandbox.contentWindow.fetch
+    return (url, options) => sandbox.contentWindow.fetch(url, options)
   }
   constructor() {
     this.pendingRequests = {}
