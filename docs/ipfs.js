@@ -54,13 +54,13 @@ class SupervisorNode {
   receive({ data, target, origin } /*:Data.WorkerInbox*/) {
     switch (data.type) {
       case "ping": {
-        return this.ping(data, target, origin)
+        return this.ping(data, target)
       }
       case "request": {
-        return this.request(data, target, origin)
+        return this.request(data, target)
       }
       case "response": {
-        return this.respond(data, target, origin)
+        return this.respond(data, target)
       }
       default: {
         console.warn(
@@ -79,9 +79,9 @@ class SupervisorNode {
 
     this.browserNode.respond(data, port, origin)
   }
-  async request(request, port, origin) {
-    const native = this.nativeNode.request(request, port, origin)
-    const browser = this.browserNode.request(request, port, origin)
+  async request(request, port) {
+    const native = this.nativeNode.request(request, port)
+    const browser = this.browserNode.request(request, port)
 
     try {
       const response = await native
@@ -111,7 +111,7 @@ class NativeClientNode {
   params:URLSearchParams
   selectedFetch:"local"|"proxy"|null
   pendingRequests:{[string]:(Data.EncodedResponse) => void}
-  request:(Data.RequestMessage, MessagePort, string) => Promise<Data.EncodedResponse>
+  request:(Data.RequestMessage, MessagePort) => Promise<Data.EncodedResponse>
   ready:Promise<void>
   onready:() => void
   onerror:(Error) => void
@@ -128,7 +128,7 @@ class NativeClientNode {
       this.onerror = reject
     })
   }
-  async connect(connection) {
+  async connect(port) {
     try {
       const value = await this.request(
         {
@@ -141,8 +141,7 @@ class NativeClientNode {
             headers: []
           }
         },
-        connection.target,
-        connection.origin
+        port
       )
       this.onready()
     } catch (error) {
@@ -151,15 +150,14 @@ class NativeClientNode {
   }
   async request(
     request /*:Data.RequestMessage*/,
-    port /*:MessagePort*/,
-    origin /*:string*/
+    port /*:MessagePort*/
   ) /*:Promise<Data.EncodedResponse>*/ {
     if (this.params.get("native") === "0") {
       throw Error("Native node is disabled")
     }
 
     try {
-      const value = await this.localRequest(request, port, origin)
+      const value = await this.localRequest(request, port)
       return value
     } catch (error) {
       const value = await this.proxyRequest(request, port)
@@ -168,8 +166,7 @@ class NativeClientNode {
   }
   async localRequest(
     { request } /*:Data.RequestMessage*/,
-    port,
-    origin
+    port
   ) /*:Promise<Data.EncodedResponse>*/ {
     const route = this.routeReuqest(request)
     const response = await fetch(request.url, {
@@ -180,7 +177,7 @@ class NativeClientNode {
 
     return await encodeResponse(response, request.url)
   }
-  async proxyRequest({ request, id } /*:Data.RequestMessage*/, port, origin) {
+  async proxyRequest({ request, id } /*:Data.RequestMessage*/, port) {
     const route = this.routeReuqest(request)
     port.postMessage({ type: "request", id, request: route }, transfer(route))
     return this.response(id)
@@ -267,14 +264,13 @@ class BrowserNode {
   async connect(connection) {}
   async request(
     request /*:Data.RequestMessage*/,
-    port /*:MessagePort*/,
-    origin /*:string*/
+    port /*:MessagePort*/
   ) /*:Promise<Data.EncodedResponse>*/ {
     if (this.params.get("in-browser") === "0") {
       throw Error("Browser node is disabled")
     }
 
-    return BrowserNode.request(this, request.request, port, origin)
+    return BrowserNode.request(this, request.request, port)
   }
   respond(response, port, origin) {}
   async gatewayRequest(path) {
@@ -283,8 +279,7 @@ class BrowserNode {
   static async request(
     ipfs /*:BrowserNode*/,
     request /*:Data.EncodedRequest*/,
-    port /*:MessagePort*/,
-    origin /*:string*/
+    port /*:MessagePort*/
   ) /*:Promise<Data.EncodedResponse>*/ {
     await ipfs.ready
     const { pathname, searchParams } = new URL(request.url)
@@ -315,6 +310,30 @@ class BrowserNode {
             AgentVersion: id.agentVersion,
             ProtocolVersion: id.protocolVersion
           }
+        })
+      }
+      case "/api/v0/dns": {
+        const Path = await ipfs.daemon.dns(searchParams.get("arg"))
+        return encodeDaemonResponse({ url: request.url, body: { Path } })
+      }
+      // TODO: Report a bug to API incompatibility buf to JS-IPFS. Because go-ipfs
+      // takes arbirtrary arg domain, ipfs CID, ipns CID and returns resolved
+      // IPFS path while js-version only accepts IPNS CID.
+      case "/api/v0/name/resolve": {
+        const options = new ParamDecoder(searchParams)
+        const { arg, recursive, nocache } = options
+        const Path = ipfs.daemon.name.resolve(arg, { recursive, nocache })
+        return encodeDaemonResponse({ url: request.url, body: { Path } })
+      }
+      // TODO: Report a bug to JS-IPFS as /api/v0/cid/base32 endpoint does not
+      // exist.
+      case "/api/v0/cid/base32": {
+        const arg = searchParams.get("arg")
+        const cid = new ipfs.daemon.types.CID(searchParams.get("arg"))
+        const base32CID = cid.toV1().toString("base32")
+        return encodeDaemonResponse({
+          url: request.url,
+          body: { CidStr: arg, Formatted: base32CID }
         })
       }
       case "/api/v0/bootstrap/add": {
@@ -836,7 +855,9 @@ class BrowserNode {
   async object$get(cid, base, upgrade, dataEncoding) {
     const node = await this.daemon.object.get(cid)
     const { data, size, links } = node.toJSON()
-    const content = Buffer.isBuffer(data) ? data.toString(dataEncoding) : data
+    const content = this.Buffer.isBuffer(data)
+      ? data.toString(dataEncoding)
+      : data
 
     return {
       Data: content,
@@ -1049,6 +1070,10 @@ class ParamDecoder {
   }
   get dataEncoding() {
     return this.searchParams.get("data-encoding") || undefined
+  }
+
+  get nocache() {
+    return this.searchParams.get("nocache") != null
   }
 }
 

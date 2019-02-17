@@ -270,14 +270,17 @@ const receive = ({ data, ports, source } /*:Data.Response*/) => {
   }
 }
 
-const encodeRequest = (request /*:Request*/) /*:Data.EncodedRequest*/ => {
+const encodeRequest = async (
+  request /*:Request*/
+) /*:Promise<Data.EncodedRequest>*/ => {
   const $request /*:Object*/ = request
   const mode = String(request.mode) === "navigate" ? null : request.mode
   const cache = request.cache === "only-if-cached" ? "default" : request.cache
+  const body = await encodeBody(request)
 
   return {
     url: request.url,
-    body: null,
+    body,
     headers: encodeHeaders(request.headers),
     mode,
     cache,

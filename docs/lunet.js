@@ -279,7 +279,7 @@ class IPFSSharedWorker extends IPFSService {
   static async IPFSSharedWorker(Worker, params) {
     const service = new this()
     const worker /*:SharedWorker*/ = new Worker(
-      `/lunet/ipfs.js?${params.toString()}`,
+      `/ipfs.js?${params.toString()}`,
       "IPFS"
     )
     worker.onerror = error => console.error(error)
@@ -308,7 +308,7 @@ class IPFSServiceWorker extends IPFSService {
     let registration = await serviceWorker.getRegistration(scope)
     if (registration == null) {
       registration = await serviceWorker.register(
-        `/lunet/ipfs.js?${params.toString()}`,
+        `/ipfs.js?${params.toString()}`,
         {
           scope,
           type: "classic"

@@ -108,7 +108,7 @@ const resolveCID = async (host, id) /*:Promise<string>*/ => {
 
 const resolveDNSLink = async (host, domain) /*:Promise<string>*/ => {
   const response = await host.fetch(
-    new URL(`/api/v0/name/resolve?recursive=1&arg=${domain}`, BASE_URL)
+    new URL(`/api/v0/dns?arg=${domain}`, BASE_URL)
   )
 
   const { Path } = await response.json()
