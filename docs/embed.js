@@ -48,7 +48,96 @@ export class LunetClient {
       case "message": {
         return receive(this, event)
       }
+      case "hashchange": {
+        const $event /*:any*/ = event
+        return this.hashchange($event)
+      }
+      case "popstate": {
+        const $event /*:any*/ = event
+        return this.popstate($event)
+      }
+      case "click": {
+        const $event /*:any*/ = event
+        return this.click($event)
+      }
+      case "beforeunload": {
+        return this.beforeunload(event)
+      }
     }
+  }
+  hashchange(event /*:Event & {newURL:string, oldURL:string}*/) {
+    return top.postMessage(
+      {
+        type: "hashchange",
+        hashchange: {
+          newURL: event.newURL,
+          oldURL: event.oldURL
+        }
+      },
+      "*"
+    )
+  }
+  popstate(event /*:Event & {state:Object}*/) {
+    return top.postMessage(
+      {
+        type: "popstate",
+        popstate: {
+          newURL: location.href,
+          state: event.state
+        }
+      },
+      "*"
+    )
+  }
+  pushState(state /*:Object*/, title /*:?string*/, href /*:string*/) {
+    return top.postMessage(
+      {
+        type: "pushstate",
+        pushstate: {
+          newURL: location.href,
+          href,
+          title,
+          state
+        }
+      },
+      "*"
+    )
+  }
+  replaceState(state /*:Object*/, title /*:?string*/, href /*:string*/) {
+    return top.postMessage(
+      {
+        type: "replacestate",
+        replacestate: {
+          newURL: location.href,
+          href,
+          state,
+          state
+        }
+      },
+      "*"
+    )
+  }
+  click(
+    event /*:{target:HTMLAnchorElement & { referrerpolicy?:string}, preventDefault():void}*/
+  ) {
+    const { href, target, referrerpolicy, rel, type } = event.target
+    if (href != null && href != "") {
+      const url = new URL(href)
+      if (location.origin !== url.origin) {
+        event.preventDefault()
+        self.open(href, target || "_blank")
+      }
+    }
+  }
+  beforeunload(event /*:Event*/) {
+    event.preventDefault()
+    return top.postMessage(
+      {
+        type: "beforeunload",
+        beforeunload: { href: location.href }
+      },
+      "*"
+    )
   }
   get serviceURL() {
     return getSetting(this, "service", "./lunet.js")
@@ -68,10 +157,35 @@ export class LunetClient {
   }
 }
 
+const setup = client => {
+  window.addEventListener("hashchange", client)
+  window.addEventListener("popstate", client)
+  window.addEventListener("click", client)
+  window.addEventListener("beforeunload", client)
+  const { pushState, replaceState } = History.prototype
+  const History$prototype /*:Object*/ = History.prototype
+  Object.defineProperties(History$prototype, {
+    pushState: {
+      value(state, title, url) {
+        pushState.call(this, state, title, url)
+        client.pushState(state, title, url)
+      }
+    },
+    replaceState: {
+      value(state, title, url) {
+        replaceState.call(this, state, title, url)
+        client.replaceState(state, title, url)
+      }
+    }
+  })
+}
+
 export const connect = async (
   client /*:LunetClient*/,
   serviceWorker /*:ServiceWorkerContainer*/
 ) => {
+  setup(client)
+
   const { mount, serviceURL, scope, serviceWorkerVersion } = client
   const swv = serviceWorkerVersion ? `&swv=${serviceWorkerVersion}` : ""
 
@@ -107,7 +221,14 @@ export const connect = async (
 
 const activate = async (client /*:LunetClient*/, event /*:any*/) => {
   const document = client.ownerDocument
-  const response = await fetch(document.location.href)
+  const { searchParams } = new URL(document.location.href)
+  const pathname = searchParams.get("pathname") || "/"
+  const search = searchParams.get("search") || ""
+  const hash = searchParams.get("hash") || ""
+  const url = `${pathname}${search}${hash}`
+
+  history.replaceState(null, "", url)
+  const response = await fetch(url)
   const content = await response.text()
 
   const parser = new DOMParser()

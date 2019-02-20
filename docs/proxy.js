@@ -84,9 +84,14 @@ const serviceFetch = async event => {
 
 const navigate = async (event /*:FetchEvent*/) => {
   return new Response(
-    `<html>
+    `<!DOCTYPE html>
+<html>
   <head>
     <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self' data: blob: lunet.link; script-src 'self' blob: data: 'unsafe-inline' 'unsafe-eval' lunet.link; style-src 'self' data: blob: 'unsafe-inline'; connect-src 'self' data: blob: lunet.link http://127.0.0.1:5001 http://127.0.0.1:8080"
+    />
     <script type="module" src="${embedURL.href}"></script>
   </head>
   <body>

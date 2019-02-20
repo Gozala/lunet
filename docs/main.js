@@ -16,14 +16,23 @@ class Lunet extends LunetHost {
 }
 
 const activate = async state => {
-  const [, app, src, ...path] = state.url.pathname.split("/")
+  const { pathname, search, hash } = state.url
+  const [, app, src, ...subpath] = pathname.split("/")
+  const path = `/${subpath.join("/")}`
   switch (app) {
     case "":
     case "webui": {
-      return await spawn({ ...state, app: "webui", src, path: path.join("/") })
+      return await spawn({
+        ...state,
+        app: "webui",
+        src,
+        path,
+        search,
+        hash
+      })
     }
     default: {
-      return await spawn({ ...state, app, src, path: path.join("/") })
+      return await spawn({ ...state, app, src, path, search, hash })
     }
   }
 }
@@ -52,9 +61,11 @@ const serve = async state => {
       scope: SERVICE_SCOPE,
       type: "classic"
     })
+    root.innerHTML = ""
   }
 }
 
+const SANDBOX_CSP = `default-src 'self' data: blob: lunet.link; script-src 'self' blob: data: 'unsafe-inline' 'unsafe-eval' lunet.link; style-src 'self' data: blob: 'unsafe-inline'; connect-src 'self' data: blob: lunet.link http://127.0.0.1:5001 http://127.0.0.1:8080;`
 const SANDBOX_DOMAIN = "celestial.link"
 const SANDBOX_OPTIONS = [
   "allow-scripts",
@@ -72,17 +83,26 @@ const launch = async state => {
   const iframe = document.createElement("iframe")
   iframe.setAttribute("sandbox", SANDBOX_OPTIONS.join(" "))
   iframe.setAttribute("seamless", "true")
+  // TODO: Figure out a way to set CSP headers in AWS
+  // iframe.setAttribute("csp", SANDBOX_CSP)
   iframe.name = "app"
   iframe.style.height = iframe.style.width = "100%"
   iframe.style.top = iframe.style.left = "0"
   iframe.style.position = "absolute"
   iframe.style.border = "none"
+  iframe.setAttribute("data-driver", state.app)
   iframe.setAttribute("data-source", state.src)
 
-  const host = Lunet.new(document)
+  const host = Lunet.new(iframe)
 
   const appCID = await resolveCID(host, state.app)
-  iframe.src = `https://${appCID}.${SANDBOX_DOMAIN}`
+  const origin = `https://${appCID}.${SANDBOX_DOMAIN}`
+  iframe.setAttribute("data-origin", origin)
+  const params = new URLSearchParams()
+  params.set("pathname", state.path)
+  params.set("search", state.url.search)
+  params.set("hash", state.url.hash)
+  iframe.src = `${origin}?${params.toString()}`
 
   root.append(iframe)
 }

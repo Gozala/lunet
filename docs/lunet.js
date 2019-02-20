@@ -6,6 +6,7 @@ import * as Data from "./lunet/data.js"
 
 export class LunetHost {
   /*::
+  root:HTMLIFrameElement
   ownerDocument:Document
   registration:ServiceWorkerRegistration
   isConnected:boolean
@@ -14,14 +15,14 @@ export class LunetHost {
   handleEvent:Event => mixed
   service:IPFSService
   */
-  static new(document /*:Document*/) {
-    const host = new this(document)
-    return host
+  static new(root /*:HTMLIFrameElement*/) {
+    return new this(root)
   }
-  constructor(ownerDocument /*:Document*/) {
-    this.ownerDocument = ownerDocument
-    const status = ownerDocument.createElement("h1")
-    const body = ownerDocument.body
+  constructor(root /*:HTMLIFrameElement*/) {
+    this.root = root
+    this.ownerDocument = root.ownerDocument
+    const status = this.ownerDocument.createElement("h1")
+    const body = this.ownerDocument.body
     if (body) {
       body.appendChild(status)
     }
@@ -52,7 +53,49 @@ export class LunetHost {
       case "request": {
         return this.request(event)
       }
+      case "hashchange": {
+        return this.hashchange(data.hashchange)
+      }
+      case "popstate": {
+        return this.popstate(data.popstate)
+      }
+      case "pushstate": {
+        return this.pushstate(data.pushstate)
+      }
+      case "replacestate": {
+        return this.replacestate(data.replacestate)
+      }
+      case "navigate": {
+        return this.navigate(data.navigate)
+      }
+      case "beforeunload": {
+        return this.beforeunload(data.beforeunload)
+      }
     }
+  }
+  hashchange(data) {
+    this.updateDriverURL(new URL(data.newURL))
+  }
+  popstate(data) {
+    this.updateDriverURL(new URL(data.newURL))
+  }
+  pushstate(data) {
+    this.updateDriverURL(new URL(data.newURL))
+  }
+  replacestate(data) {
+    this.updateDriverURL(new URL(data.newURL))
+  }
+  beforeunload(data) {
+    this.root.src = this.root.src
+    console.error("Preventing application from navigating away")
+  }
+  updateDriverURL(newURL /*:URL*/) {
+    const source = this.root.getAttribute("data-source") || ""
+    const driver = this.root.getAttribute("data-driver") || ""
+    const { protocol, hostname } = new URL(this.root.src)
+    const { pathname, search, hash } = newURL
+    const url = `/${driver}/${source}${pathname}${search}${hash}`
+    this.ownerDocument.defaultView.history.replaceState(null, "", url)
   }
   request(event /*:Data.Request*/) {
     return this.relay(event)
