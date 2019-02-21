@@ -1,51 +1,63 @@
 # lunet.link
 
-This is a litte experiment that explores idea progressive peer-to-peer web applications (PPWA) in mainstream browsers. Primary goal is to deliver seamless experience that can be transparently enhanced to truly P2P (as in no server intermediaries) [through the native application][native talk] providing access to the network.
+This is a litte experiment that explores idea of progressive peer-to-peer web applications (PPWA) in mainstream browsers. Primary goal is to deliver seamless experience that can be transparently enhanced to truly P2P (as in no server intermediaries) [through the native application][native talk] providing access to the corresponding network.
 
 ### Status
 
-Current proof of concept provides access to the [IPFS][] network. It assumes [ipfs-desktop][] application installed and runing.
+This is **proof of concept** and an ongoing exploration. Things keep changing and you should not use it for anything other explorations / prototypes which will likely break here and there.
 
-> It should also work with just local IPFS node as long as it has [daemon][ipfs-daemon] and [gateway][ipfs-gateway] active (Which is the a default).
+Current prototype provides access to the [IPFS][] network, using in-browser [JS IPFS][] node running in a [shared worker][]. Prototype will also attempts to leverage [ipfs-desktop][] application if one is installed and runing.
 
-It works on Firefox and Chrome, probably on Edge (don't have access to test) but not on Safari as it [deliberetly](https://bugs.webkit.org/show_bug.cgi?id=171934) chooses to be [incompatible with standards](https://w3c.github.io/webappsec-secure-contexts/#is-origin-trustworthy) and block access to loopback address.
+> Local IPFS node with running [daemon][ipfs-daemon] and [gateway][ipfs-gateway] works just as well.
 
-> Support for Safari is likely to be added in the future for details follow along this [discussion thread][].
+It works on Firefox and Chrome, probably on Edge (don't have access to test). In Safari only in-browser node is used due to [deliberete](https://bugs.webkit.org/show_bug.cgi?id=171934) choice by Apple to be [incompatible with standards](https://w3c.github.io/webappsec-secure-contexts/#is-origin-trustworthy) and block access to loopback address.
+
+> In Safari [service worker][] is used instead of [shared worker][] which are also difficult to debug there, which is to say technically it works on Safari but it's less tested and chances are it might be broken there from time to time.
 
 #### Example PPWA
 
-Assuming [ipfs-desktop][] is running you can try a fork of https://peerdium.com/ that will load / publish documents on [IPFS] network. You can try it at:
+If you navigate to
 
-https://gozala.io/peerdium/
+https://lunet.link/peerdium.gozala.io/
 
-And browse the source at:
+You should a fork of https://peerdium.com/ application.
 
-https://github.com/gozala/peerdium
+You could access same exact example by navigating to
 
-### How is PWAA is setup ?
+https://lunet.link/ipfs/QmYjtd61SyXU4aVSKWBrtDiXjHtpJVFCbvR7RgJ57BPZro/
 
-Application hosts a minimal [static HTML file](https://github.com/Gozala/peerdium/blob/master/docs/index.html) used for bootstrapping app hosted on IPFS. To do this HTML file embeds [lunet client][] implementation (or equivalent) and a pointer to an app resources on IPFS network through a `meta` tag as illustrated below:
+That is because peerdium.gozala.io is set up with IPFS [DNSLink][] corresponding to that exact IPFS address:
 
-```html
-<meta
-  name="mount"
-  content="/ipfs/QmYjtd61SyXU4aVSKWBrtDiXjHtpJVFCbvR7RgJ57BPZro/"
-/>
-
-<script type="module" async src="https://lunet.link/lunet/client.js"></script>
+```
+dig +noall +answer TXT _dnslink.peerdium.gozala.io
+_dnslink.peerdium.gozala.io. 4502 IN    TXT     "dnslink=/ipfs/QmYjtd61SyXU4aVSKWBrtDiXjHtpJVFCbvR7RgJ57BPZro/"
 ```
 
-> You can [browse path mounted](https://webui.ipfs.io/#/explore/QmYjtd61SyXU4aVSKWBrtDiXjHtpJVFCbvR7RgJ57BPZro) through IPLD explorer (Those are just [files from my peerdium fork](https://github.com/gozala/peerdium)).
+### How does this work ?
 
-Application also needs to host static [`lunet.js`] file to setup a [service worker][] which will serve resources from mounted IPFS path through the embedded [lunet client][]. This file just needs to import [lunet proxy][] that takes care of all this:
+Actual [application resources](https://github.com/Gozala/peerdium/tree/632f7e138472406db89e8d4ac9c3153216e0e3dc) are published to IPFS network and can be addressed as [`/ipfs/QmYjtd61SyXU4aVSKWBrtDiXjHtpJVFCbvR7RgJ57BPZro/`](https://explore.ipld.io/#/explore/QmYjtd61SyXU4aVSKWBrtDiXjHtpJVFCbvR7RgJ57BPZro). As you could see from `dig` command output there is also a corresponding DNS record for `peerdium.gozala.io`.
 
-```js
-importScripts("https://lunet.link/lunet/proxy.js")
-```
+When https://lunet.link/peerdium.gozala.io/ is loaded it connects to the IPFS network through in-browser node in [shared worker][] and / or [ipfs-desktop][].
 
-> This file is necessary because [service worker][] can only be registered from the same URL it will serve.
+It then resolve `peerdium.gozala.io` IPFS address recorded as [DNSLink]. And creates [sandboxed iframe](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/iframe#attr-sandbox) corresponding to it's origin
 
-Note that on a first load everything will be setup such that any subsequent loads will be handled by service worker, meaning application will be fully functional offline and it will be loading everything from IPFS network.
+> It takes CID `QmYjtd61SyXU4aVSKWBrtDiXjHtpJVFCbvR7RgJ57BPZro` and encodes it as base32 (to avoid case sesitivity) and uses that as subdomain to provide origin separation between apps. Specifically it loads following URL into iframe:
+>
+> `bafybeie2rd23t4aa6qebc4ivjs4tewkaapm6t2ibwe3d6mpwxzd47g76da.celestial.link`
+>
+> **Note:** celestal.link serves same [static content](https://github.com/Gozala/lunet/tree/master/docs/celestial) regardless of the subdomain.
+
+Sanboxed iframe is setup with a service worker such that all requestes will be served from shared IPFS node and are relative to IPFS application IPFS address - [`/ipfs/QmYjtd61SyXU4aVSKWBrtDiXjHtpJVFCbvR7RgJ57BPZro/`](https://explore.ipld.io/#/explore/QmYjtd61SyXU4aVSKWBrtDiXjHtpJVFCbvR7RgJ57BPZro)
+
+Application can also issue POST request to write posted data into user library managed by lunet.link.
+
+> This is not fully implemented yet, but idea is that application will not know where produced data ends up, what the address for it or whether it's saved encrypted. Application will only be able to access data provided to it without revealing any of the details about it. By navigating to
+>
+> https://lunet.link/peerdium.gozala.io/ipfs/QmXg4doMsTcBXgZ3JQosowt12q9Z6xZgURZVkcwCDwRX42/
+>
+> Lunet will setup application sandox such that it can access data provided `/ipfs/QmXg4doMsTcBXgZ3JQosowt12q9Z6xZgURZVkcwCDwRX42/` through `GET` requests `fetch('/data')` and save updates into user library via `PATCH` request all without knowing address of the data or a key used to encrypt it before (if ever) it's published to IPFS.
+
+Various methods provided by web platfrom are used to prevent application from every talking to any servers as we want an ecosystem that does not monetize on smuggled data, but rather keeps user in full control of it.
 
 ### Wait, what ? How ?
 
@@ -55,17 +67,25 @@ Below diagram illustrates a flow through which in this setup browser fetches eac
 
 ![request flow diagram](./request-flow.svg)
 
-Additonally proxy service worker also relays request for `https://lunet.link/api/` to an IPFS [Daemon REST API](https://docs.ipfs.io/reference/api/http/). That is also how [forked peerdium example][peerdium example] [publishes](https://github.com/Gozala/peerdium/blob/960422670399a76d5bbb9aff4f2c1cf704ebf0a9/static/js/editor.js#L97-L108) and [loads](https://github.com/Gozala/peerdium/blob/960422670399a76d5bbb9aff4f2c1cf704ebf0a9/static/js/editor.js#L110-L119) documents out of IPFS network.
+# Protocol Diversity
 
-> **Warning**: At the moment lunet will allow any embedder to read / write data into local IPFS node. In a future it will request user consent before doing so.
+This prototype uses IPFS, however there is no reason why same approach could not be used to support [Dat][], [SSB][] or other P2P protocol of your choice. In fact why not embrace diversity ? Everything is intentionally designed such that multiple protocols could be used in synergy, would not it be nice to e.g. load application from [IPFS][] and data it reads / writes from [Dat][]:
 
-## Next
+```
+lunet.link/ipfs/QmYjtd61SyXU4aVSKWBrtDiXjHtpJVFCbvR7RgJ57BPZro/dat/e56c7ad7bb3d27f516970d14ee5cb9d2cfa7eb15184278cf5a2dd5bbccd02a6b/posts
+```
 
-Next step would be to use in-browser [JS IPFS][] node in case IPFS Daemon is not available.
+How about application from [Dat][] operating on data from [SSB][]:
 
-# Beyond IPFS
+```
+lunet.link/dat/6dd4a37c98ef31d2c6a13b27d27a25e2fc7fa9b7bc16b72617852b043367a0be/ssb/@B/Pg4xaGbgy2CFrza9g5kGZurAILCk+NapOcTXah98I=.ed25519
+```
 
-This prototype uses IPFS, however you are encouraged to make a [Dat][], [SSB][] or other P2P protocol version to make these kind of applications on the web more mainstream!
+# Can I trust you ?
+
+How can I trust lunet.link / celestal.link not to compromise my privacy ? What if you tomorrow you deploy version that smuggles all my private data so you could sell it off to [Cambridge Analytica](https://en.wikipedia.org/wiki/Facebook%E2%80%93Cambridge_Analytica_data_scandal) ?
+
+You can not, nor you should! You can embrace [IndieWeb](http://indieweb.org/) spirit in you and deploy lunet yourself! In fact in a future lunet will [register protocol handlers](https://developer.mozilla.org/en-US/docs/Web/API/Navigator/registerProtocolHandler) so that instead of using https://lunet.link/peerdium.gozala.io/ we'll use `ipfs://peerdium.gozala.io` which will redirect to your own (maybe even altered) lunet deployment.
 
 [lunet client]: https://github.com/Gozala/lunet/blob/master/docs/lunet/client.js
 [ipfs]: http://ipfs.io/
@@ -81,3 +101,5 @@ This prototype uses IPFS, however you are encouraged to make a [Dat][], [SSB][] 
 [js ipfs]: https://github.com/ipfs/js-ipfs
 [dat]: http://datproject.org/
 [ssb]: https://www.scuttlebutt.nz/
+[shared worker]: https://developer.mozilla.org/en-US/docs/Web/API/SharedWorker
+[dnslink]: https://docs.ipfs.io/guides/concepts/dnslink/
