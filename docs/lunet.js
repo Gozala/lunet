@@ -37,21 +37,24 @@ export class LunetHost {
     }
   }
   disconnectedCallback() {}
-  handleEvent(event /*:MessageEvent*/) {
+  handleEvent(event /*:any*/) {
     switch (event.type) {
       case "message": {
         return this.receive(event)
       }
     }
   }
-  receive(event /*:any*/) {
+  receive(event /*:Data.LunetMessage*/) {
     const { data, ports } = event
     switch (data.type) {
       case "connect": {
         return this.connect(...ports)
       }
       case "request": {
-        return this.request(event)
+        // TODO: Fix up types. Problem is that we match on `data` which does not
+        // refine event which is what we need to refine instead.
+        const $event /*:any*/ = event
+        return this.request($event)
       }
       case "hashchange": {
         return this.hashchange(data.hashchange)
@@ -65,27 +68,24 @@ export class LunetHost {
       case "replacestate": {
         return this.replacestate(data.replacestate)
       }
-      case "navigate": {
-        return this.navigate(data.navigate)
-      }
       case "beforeunload": {
-        return this.beforeunload(data.beforeunload)
+        return this.beforeunload()
       }
     }
   }
-  hashchange(data) {
+  hashchange(data /*:Data.HashChangeData*/) {
     this.updateDriverURL(new URL(data.newURL))
   }
-  popstate(data) {
+  popstate(data /*:Data.PopStateData*/) {
     this.updateDriverURL(new URL(data.newURL))
   }
-  pushstate(data) {
+  pushstate(data /*:Data.PopStateData*/) {
     this.updateDriverURL(new URL(data.newURL))
   }
-  replacestate(data) {
+  replacestate(data /*:Data.PopStateData*/) {
     this.updateDriverURL(new URL(data.newURL))
   }
-  beforeunload(data) {
+  beforeunload() {
     this.root.src = this.root.src
     console.error("Preventing application from navigating away")
   }
@@ -94,7 +94,7 @@ export class LunetHost {
     const driver = this.root.getAttribute("data-driver") || ""
     const { protocol, hostname } = new URL(this.root.src)
     const { pathname, search, hash } = newURL
-    const url = `/${driver}/${source}${pathname}${search}${hash}`
+    const url = `${driver}${source}${pathname}${search}${hash}`
     this.ownerDocument.defaultView.history.replaceState(null, "", url)
   }
   request(event /*:Data.Request*/) {

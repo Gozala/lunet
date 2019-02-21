@@ -65,7 +65,7 @@ export class LunetClient {
       }
     }
   }
-  hashchange(event /*:Event & {newURL:string, oldURL:string}*/) {
+  hashchange(event /*:Data.HashChangeEvent*/) {
     return top.postMessage(
       {
         type: "hashchange",
@@ -77,7 +77,7 @@ export class LunetClient {
       "*"
     )
   }
-  popstate(event /*:Event & {state:Object}*/) {
+  popstate(event /*:Data.PopStateEvent*/) {
     return top.postMessage(
       {
         type: "popstate",

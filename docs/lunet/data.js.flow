@@ -73,12 +73,12 @@ export type Response = {
   source: ServiceWorker
 }
 
-export type Request = {
-  type: "message",
-  data: RequestMessage,
-  ports: MessagePort[],
-  target: MessagePort,
-  origin: string
+export interface Request {
+  type: "message";
+  +data: RequestMessage;
+  ports: MessagePort[];
+  target: MessagePort;
+  origin: string;
 }
 
 export type WorkerInbox = {
@@ -103,6 +103,10 @@ export type PongMessage = {
   type: "pong"
 }
 
+export type ConnectMessage = {
+  type: "connect"
+}
+
 export type WorkerIncomingMessage =
   | RequestMessage
   | PingMessage
@@ -112,3 +116,63 @@ export type WorkerOutgoingMessage =
   | ResponseMessage
   | PongMessage
   | RequestMessage
+
+export interface HashChangeEvent extends Event {
+  newURL: string;
+  oldURL: string;
+}
+
+export interface PopStateEvent extends Event {
+  state: Object;
+}
+
+export type HashChangeMessage = {
+  type: "hashchange",
+  hashchange: HashChangeData
+}
+
+export type HashChangeData = {
+  newURL: string,
+  oldURL: string
+}
+export type PopStateMessage = {
+  type: " popstate",
+  popstate: PopStateData
+}
+
+export type PopStateData = {
+  newURL: string,
+  href: string,
+  title: string,
+  state: Object
+}
+
+export type PushStateMessage = {
+  type: " pushstate",
+  pushstate: PopStateData
+}
+
+export type ReplaceStateMessage = {
+  type: " pushstate",
+  pushstate: PopStateData
+}
+export type BeforeUnloadMessage = {
+  type: "beforeunload",
+  beforeunload: null
+}
+
+export interface LunetMessage {
+  +data: LunetMessageData;
+  ports: MessagePort[];
+  target: MessagePort;
+  origin: string;
+}
+
+export type LunetMessageData =
+  | ConnectMessage
+  | RequestMessage
+  | HashChangeMessage
+  | PopStateMessage
+  | PushStateMessage
+  | ReplaceStateMessage
+  | BeforeUnloadMessage
