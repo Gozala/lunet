@@ -229,6 +229,16 @@ const activate = async (client /*:LunetClient*/, event /*:any*/) => {
 
   history.replaceState(null, "", url)
   const response = await fetch(url)
+  const contentType = response.headers.get("content-type") || ""
+  const mime = contentType.split(";").shift()
+  if (mime === "text/html") {
+    activateDocument(response)
+  } else {
+    activateBlob(response)
+  }
+}
+
+const activateDocument = async response => {
   const content = await response.text()
 
   const parser = new DOMParser()
@@ -278,6 +288,28 @@ const activate = async (client /*:LunetClient*/, event /*:any*/) => {
     await when("load", script)
   }
   body.style.display = display
+}
+
+const activateBlob = async response => {
+  const $document /*:any*/ = document
+  const {
+    head,
+    body
+  } /*:{head:HTMLHeadElement, body:HTMLBodyElement}*/ = $document
+  const blob = await response.blob()
+  const url = URL.createObjectURL(blob)
+  const iframe = document.createElement("iframe")
+  iframe.setAttribute("seamless", "true")
+  iframe.setAttribute("sandbox", "")
+  iframe.style.height = iframe.style.width = "100%"
+  iframe.style.top = iframe.style.left = "0"
+  iframe.style.position = "absolute"
+  iframe.style.border = "none"
+  iframe.src = url
+  body.append(iframe)
+  await when("load", iframe)
+
+  URL.revokeObjectURL(url)
 }
 
 export const receive = (client /*:LunetClient*/, event /*:any*/) => {
