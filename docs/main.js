@@ -137,9 +137,15 @@ export class UserAgent {
         }
       }
       default: {
+        const { protocol, authority, pathname } = address
+        const fallback = new Address("", protocol, `/${authority}${pathname}`)
+        try {
+          return await this.createMount(fallback)
+        } catch (_) {
         throw RangeError(`Unsupported resource address ${address.toString()}`)
       }
     }
+  }
   }
   async createDrive(address /*:Address*/) /*:Promise<Driver>*/ {
     const service = this.services
@@ -159,9 +165,15 @@ export class UserAgent {
         }
       }
       default: {
+        const { protocol, authority, pathname } = address
+        const fallback = new Address("", protocol, `/${authority}${pathname}`)
+        try {
+          return await this.createDrive(fallback)
+        } catch (_) {
         throw RangeError(`Unsupported resource address ${address.toString()}`)
       }
     }
+  }
   }
   createFrame() {
     const iframe = this.ownerDocument.createElement("iframe")
