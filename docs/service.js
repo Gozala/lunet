@@ -1,7 +1,7 @@
 // @flow strict
 
 const NAME = "service"
-const VERSION = "0.0.4"
+const VERSION = "0.0.5"
 const ID = `${NAME}@${VERSION}`
 const serviceURL = new URL("https://lunet.link/")
 
@@ -82,7 +82,6 @@ const setup = async () => {
   const urls = [
     new URL("/main.js", serviceURL).href,
     new URL("/embed.js", serviceURL).href,
-    new URL("/lunet.js", serviceURL).href,
     new URL("/ipfs.js", serviceURL).href,
     new URL("/lunet/unpkg.com/ipfs/dist/index.js", serviceURL).href,
     new URL("/lunet/unpkg.com/ipfs/dist/index.js.map", serviceURL).href,

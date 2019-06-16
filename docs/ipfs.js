@@ -149,13 +149,14 @@ class NativeClientNode {
     }
   }
   async request(
-    request /*:Data.RequestMessage*/,
+    requestMessage /*:Data.RequestMessage*/,
     port /*:MessagePort*/
   ) /*:Promise<Data.EncodedResponse>*/ {
     if (this.params.get("native") === "0") {
       throw Error("Native node is disabled")
     }
 
+    const request = this.routeRequest(requestMessage)
     try {
       const value = await this.localRequest(request, port)
       return value
@@ -168,7 +169,6 @@ class NativeClientNode {
     { request } /*:Data.RequestMessage*/,
     port
   ) /*:Promise<Data.EncodedResponse>*/ {
-    const route = this.routeReuqest(request)
     const response = await fetch(request.url, {
       method: request.method,
       headers: decodeHeaders(request.headers),
@@ -178,13 +178,12 @@ class NativeClientNode {
     return await encodeResponse(response, request.url)
   }
   async proxyRequest({ request, id } /*:Data.RequestMessage*/, port) {
-    const route = this.routeReuqest(request)
-    port.postMessage({ type: "request", id, request: route }, transfer(route))
+    port.postMessage({ type: "request", id, request }, transfer(request))
     return this.response(id)
   }
-  routeReuqest(request) {
-    const url = this.route(new URL(request.url))
-
+  routeRequest({ id, request }) /*:Data.RequestMessage*/ {
+    const url = this.route(new URL(request.url)).href
+    const { method } = request
     const headers = decodeHeaders(request.headers)
     headers.delete("upgrade-insecure-requests")
     headers.delete("origin")
@@ -195,9 +194,16 @@ class NativeClientNode {
     headers.delete("cache-control")
     headers.delete("pragma")
 
-    request.url = url.href
-    request.headers = encodeHeaders(headers)
-    return request
+    return {
+      id,
+      type: "request",
+      request: {
+        ...request,
+        url,
+        method,
+        headers: encodeHeaders(headers)
+      }
+    }
   }
   route(url) /*:URL*/ {
     const [, base] = url.pathname.split("/")
@@ -250,16 +256,19 @@ class BrowserNode {
     importScripts("lunet/unpkg.com/tar-stream/dist/index.js")
 
     this.params = params
-    const daemon = new self.Ipfs()
-    this.daemon = daemon
-    this.gateway = self.IpfsHttpResponse
-    this.ready = onready(daemon)
-
-    const { Buffer, multiaddr, CID, dagPB } = daemon.types
+    const { Buffer, multiaddr, CID } = self.Ipfs
     this.Buffer = Buffer
     this.multiaddr = multiaddr
     this.CID = CID
-    this.dagPB = dagPB
+
+    const daemon = new self.Ipfs()
+    this.daemon = daemon
+    this.gateway = self.IpfsHttpResponse
+    this.ready = this.activate()
+  }
+  async activate() {
+    await onready(this.daemon)
+    this.dagPB = await this.daemon._ipld._getFormat("dag-pb")
   }
   async connect(connection) {}
   async request(
@@ -273,7 +282,7 @@ class BrowserNode {
     return BrowserNode.request(this, request.request, port)
   }
   respond(response, port, origin) {}
-  async gatewayRequest(path) {
+  gatewayRequest(path) {
     return this.gateway.getResponse(this.daemon, path)
   }
   static async request(
@@ -281,555 +290,628 @@ class BrowserNode {
     request /*:Data.EncodedRequest*/,
     port /*:MessagePort*/
   ) /*:Promise<Data.EncodedResponse>*/ {
-    await ipfs.ready
-    const { pathname, searchParams } = new URL(request.url)
-    switch (pathname) {
-      case "/api/v0/version": {
-        const version = await ipfs.daemon.version()
-        return encodeDaemonResponse({
-          url: request.url,
-          body: {
-            Version: version.version,
-            Commit: version.commit,
-            Repo: version.repo
-          }
-        })
-      }
-      case "/api/v0/shutdown": {
-        await ipfs.daemon.stop()
-        return self.close()
-      }
-      case "/api/v0/id": {
-        const id = await ipfs.daemon.id()
-        return encodeDaemonResponse({
-          url: request.url,
-          body: {
-            ID: id.id,
-            PublicKey: id.publicKey,
-            Addresses: id.addresses,
-            AgentVersion: id.agentVersion,
-            ProtocolVersion: id.protocolVersion
-          }
-        })
-      }
-      case "/api/v0/dns": {
-        const Path = await ipfs.daemon.dns(searchParams.get("arg"))
-        return encodeDaemonResponse({ url: request.url, body: { Path } })
-      }
-      // TODO: Report a bug to API incompatibility buf to JS-IPFS. Because go-ipfs
-      // takes arbirtrary arg domain, ipfs CID, ipns CID and returns resolved
-      // IPFS path while js-version only accepts IPNS CID.
-      case "/api/v0/name/resolve": {
-        const options = new ParamDecoder(searchParams)
-        const { arg, recursive, nocache } = options
-        const Path = ipfs.daemon.name.resolve(arg, { recursive, nocache })
-        return encodeDaemonResponse({ url: request.url, body: { Path } })
-      }
-      // TODO: Report a bug to JS-IPFS as /api/v0/cid/base32 endpoint does not
-      // exist.
-      case "/api/v0/cid/base32": {
-        const arg = searchParams.get("arg")
-        const cid = new ipfs.daemon.types.CID(searchParams.get("arg"))
-        const base32CID = cid.toV1().toString("base32")
-        return encodeDaemonResponse({
-          url: request.url,
-          body: { CidStr: arg, Formatted: base32CID }
-        })
-      }
-      case "/api/v0/bootstrap/add": {
-        const options = new ParamDecoder(searchParams)
-        const { arg } = options
-        const addr = arg || ipfs.daemon.multiaddr(arg)
-        const data = await ipfs.daemon.add(addr && addr.toString(), {
-          default: options.default
-        })
-        return encodeDaemonResponse({ url: request.url, body: data })
-      }
-      case "/api/v0/bootstrap/list": {
-        const data = await ipfs.daemon.list()
-        return encodeDaemonResponse({ url: request.url, body: data })
-      }
-      case "/api/v0/bootstrap/rm": {
-        const { arg, all } = new ParamDecoder(searchParams)
-        const addr = arg || ipfs.daemon.multiaddr(arg)
-        const data = await ipfs.daemon.bootstrap.rm(addr && addr.toString(), {
-          all
-        })
-        return encodeDaemonResponse({ url: request.url, body: data })
-      }
-      case "/api/v0/block/get": {
-        const key = new ipfs.CID(searchParams.get("arg"))
-        const block = await ipfs.daemon.block.get(key)
-        return encodeDaemonResponse({
-          url: request.url,
-          body: block.data.buffer,
-          headers: [["X-Stream-Output", "1"]]
-        })
-      }
-      case "/api/v0/block/put": {
-        const { mhtype, format, version, base } = new ParamDecoder(searchParams)
-        const data = await decodeFileBody(request)
-        const content = ipfs.Buffer.from(data)
-        const block = await ipfs.daemon.block.put(content, {
-          mhtype,
-          format,
-          version
-        })
-
-        return encodeDaemonResponse({
-          url: request.url,
-          body: {
-            Key: ipfs.cidToString(block.cid, { base }),
-            Size: block.data.length
-          }
-        })
-      }
-      case "/api/v0/block/rm": {
-        const key = new ipfs.CID(searchParams.get("arg"))
-        const data = await ipfs.daemon.block.rm(key)
-        return encodeDaemonResponse({ url: request.url, body: data })
-      }
-      case "/api/v0/block/stat": {
-        const { arg, base } = new ParamDecoder(searchParams)
-        const key = new ipfs.CID(arg)
-        const block = await ipfs.daemon.block.stat(key)
-        return encodeDaemonResponse({
-          url: request.url,
-          body: {
-            Key: ipfs.cidToString(block.cid, { base }),
-            Size: block.data.length
-          }
-        })
-      }
-      case "/api/v0/object/new": {
-        const { arg, base } = new ParamDecoder(searchParams)
-        const cid = await ipfs.daemon.object.new(arg)
-        const body = await ipfs.object$get(cid, base, false)
-        return encodeDaemonResponse({
-          url: request.url,
-          body
-        })
-      }
-      case "/api/v0/object/get": {
-        const { arg, base, enc, dataEncoding } = new ParamDecoder(searchParams)
-        const upgrade = false
-        const key = new ipfs.CID(arg)
-        const body = await ipfs.object$get(key, base, false, dataEncoding)
-        return encodeDaemonResponse({
-          url: request.url,
-          body
-        })
-      }
-      case "/api/v0/object/put": {
-        const { arg, inputenc, base } = new ParamDecoder(searchParams)
-        const upgrade = false
-        const body = await decodeFileBody(request)
-        if (inputenc === "protobuf") {
-          const content = ipfs.Buffer.from(body)
-          const node = await ipfs.dagPB.util.deserialize(content)
-          const cid = await ipfs.dagPB.util.cid(node)
-          const { data, size, links } = node.toJSON()
+    try {
+      await ipfs.ready
+      const { pathname, searchParams } = new URL(request.url)
+      switch (pathname) {
+        case "/api/v0/version": {
+          const version = await ipfs.daemon.version()
           return encodeDaemonResponse({
             url: request.url,
             body: {
-              Data: data,
-              Hash: ipfs.cidToString(cid, { base, upgrade }),
-              Size: size,
-              Links: links.map(link => {
-                return {
-                  Name: link.name,
-                  Size: link.size,
-                  Hash: ipfs.cidToString(link.cid, { base, upgrade })
-                }
-              })
+              Version: version.version,
+              Commit: version.commit,
+              Repo: version.repo
             }
           })
         }
-        return encodeDaemonResponse({
-          url: request.url,
-          body
-        })
-      }
-      case "/api/v0/object/stat": {
-        const { arg, base } = new ParamDecoder(searchParams)
-        const upgrade = false
-        const key = new ipfs.CID(arg)
-        const stats = await ipfs.daemon.object.stat(key)
-        const data = {
-          Hash: ipfs.cidToString(stats.Hash, { base, upgrade }),
-          ...stats
+        case "/api/v0/shutdown": {
+          await ipfs.daemon.stop()
+          return self.close()
         }
-        return encodeDaemonResponse({ url: request.url, body: data })
-      }
-      case "/api/v0/object/data": {
-        const { arg, base } = new ParamDecoder(searchParams)
-        const upgrade = false
-        const key = new ipfs.CID(arg)
-        const data = await ipfs.daemon.object.data(key)
-        return encodeDaemonResponse({ url: request.url, body: data.buffer })
-      }
-      case "/api/v0/object/links": {
-        const { arg, base } = new ParamDecoder(searchParams)
-        const key = new ipfs.CID(arg)
-        const { Hash, Links } = await ipfs.object$get(key, base, false)
-        return encodeDaemonResponse({
-          url: request.url,
-          body: { Hash, Links }
-        })
-      }
-      case "/api/v0/object/patch/append-data": {
-        const { arg, inputenc, base } = new ParamDecoder(searchParams)
-        const upgrade = false
-        const key = new ipfs.CID(arg)
-        const body = await decodeFileBody(request)
-        const content = ipfs.Buffer.from(body)
-        const cid = await ipfs.daemon.object.patch.appendData(key, content)
-        const data = await ipfs.object$get(cid, base, false)
-        return encodeDaemonResponse({
-          url: request.url,
-          body: data
-        })
-      }
-      case "/api/v0/object/patch/set-data": {
-        const { arg, inputenc, base } = new ParamDecoder(searchParams)
-        const key = new ipfs.CID(arg)
-        const upgrade = false
-        const body = await decodeFileBody(request)
-        const content = ipfs.Buffer.from(body)
-        const cid = await ipfs.daemon.object.patch.setData(key, content)
-        const { Hash, Links } = await ipfs.object$get(cid, base, false)
-        return encodeDaemonResponse({
-          url: request.url,
-          body: { Hash, Links }
-        })
-      }
-      case "/api/v0/object/patch/add-link": {
-        const { args, base } = new ParamDecoder(searchParams)
-        const [root, name, ref] = args
-        const rootCID = new ipfs.CID(root)
-        const refCID = new ipfs.CID(ref)
-        const node = await ipfs.daemon.object.get(rootCID)
-        const link = new ipfs.dagPB.DAGLink(name, node.size, refCID)
-        const cid = await ipfs.daemon.object.patch.addLink(rootCID, link)
-        const body = await ipfs.object$get(cid, base, false)
-        return encodeDaemonResponse({
-          url: request.url,
-          body
-        })
-      }
-      case "/api/v0/object/patch/rm-link": {
-        const { args, base } = new ParamDecoder(searchParams)
-        const [root, link] = args
-        const rootCID = new ipfs.CID(root)
-        const cid = await ipfs.daemon.object.patch.rmLink(rootCID, {
-          name: link
-        })
-        const body = await ipfs.object$get(cid, base, false)
-        return encodeDaemonResponse({
-          url: request.url,
-          body
-        })
-      }
-      case "/api/v0/pin/add": {
-        const { arg, recursive, base } = new ParamDecoder(searchParams)
-        const pins = await ipfs.daemon.pin.add(arg, { recursive })
-        return encodeDaemonResponse({
-          url: request.url,
-          body: { Pins: pins.map(pin => ipfs.cidToString(pin.hash, { base })) }
-        })
-      }
-      case "/api/v0/pin/rm": {
-        const { arg, recursive, base } = new ParamDecoder(searchParams)
-        const pins = await ipfs.daemon.pin.rm(arg, { recursive })
-        return encodeDaemonResponse({
-          url: request.url,
-          body: { Pins: pins.map(pin => ipfs.cidToString(pin.hash, { base })) }
-        })
-      }
-      case "/api/v0/pin/ls": {
-        const { arg, recursive, base } = new ParamDecoder(searchParams)
-        const pins = await ipfs.daemon.pin.ls(arg)
-        const pinset = {}
-        for (const { hash, type } of pins) {
-          pinset[ipfs.cidToString(hash, { base })] = { Type: type }
+        case "/api/v0/id": {
+          const id = await ipfs.daemon.id()
+          return encodeDaemonResponse({
+            url: request.url,
+            body: {
+              ID: id.id,
+              PublicKey: id.publicKey,
+              Addresses: id.addresses,
+              AgentVersion: id.agentVersion,
+              ProtocolVersion: id.protocolVersion
+            }
+          })
         }
-        return encodeDaemonResponse({
-          url: request.url,
-          body: { Keys: pinset }
-        })
-      }
-      case "/api/v0/dns": {
-        const path = await ipfs.daemon.dns(searchParams.get("arg"))
-        return encodeDaemonResponse({ url: request.url, body: { Path: path } })
-      }
-      case "/api/v0/add": {
-        const input = decodeRequest(request)
-        const formData = await input.formData()
-        const base = searchParams.get("cid-base")
-        const files = []
-        for (const file of formData.values()) {
-          if (file instanceof File) {
-            const buffer = await readWith(reader =>
-              reader.readAsArrayBuffer(file)
-            )
-            const content = ipfs.Buffer.from(buffer)
-            files.push({ path: file.name, content })
-          }
+        case "/api/v0/dns": {
+          const Path = await ipfs.daemon.dns(searchParams.get("arg"))
+          return encodeDaemonResponse({ url: request.url, body: { Path } })
         }
-
-        const result = await ipfs.daemon.add(files)
-        const data = result.map(file => ({
-          Name: file.path, // addPullStream already turned this into a hash if it wanted to
-          Hash: ipfs.cidToString(file.hash, { base }),
-          Size: file.size
-        }))
-
-        return encodeDaemonResponse({
-          url: request.url,
-          body: data.length === 1 ? data[0] : data
-        })
-      }
-      case "/api/v0/get": {
-        const { arg } = new ParamDecoder(searchParams)
-        const files = await ipfs.daemon.get(arg)
-        const pack = self.tar.pack()
-        for (const file of files) {
-          if (file.content) {
-            const header = { name: file.path, size: file.size }
-            await callout(cb => pack.entry(header, file.content, cb))
-          } else {
-            const header = { type: "directory", name: file.path }
-            await callout(cb => pack.entry(header, cb))
+        // TODO: Report a bug to API incompatibility buf to JS-IPFS. Because go-ipfs
+        // takes arbirtrary arg domain, ipfs CID, ipns CID and returns resolved
+        // IPFS path while js-version only accepts IPNS CID.
+        case "/api/v0/name/resolve": {
+          const options = new ParamDecoder(searchParams)
+          const { arg, recursive, nocache } = options
+          let cid = ipfs.parseCID(String(arg))
+          if (cid == null) {
+            const Path = await ipfs.daemon.dns(arg)
+            const [, protocol, key] = Path.split("/")
+            if (protocol === "ipfs") {
+              return encodeDaemonResponse({ url: request.url, body: { Path } })
+            } else {
+              cid = key
+            }
           }
+          const Path = await ipfs.daemon.name.resolve(cid.toString(), {
+            recursive,
+            nocache
+          })
+          return encodeDaemonResponse({ url: request.url, body: { Path } })
         }
-        pack.finalize()
-
-        const blob = await nodeSreamAsBlob(pack)
-        const buffer = await readWith(reader => reader.readAsArrayBuffer(blob))
-
-        return encodeDaemonResponse({
-          url: request.url,
-          body: buffer,
-          headers: [["X-Stream-Output", "1"]]
-        })
-      }
-      case "/api/v0/stats/bw": {
-        const { peer, proto, poll, interval } = new ParamDecoder(searchParams)
-
-        const data = await ipfs.daemon.stats.bw({ peer, proto, poll, interval })
-
-        return encodeDaemonResponse({
-          url: request.url,
-          body: `${encodeBandwidth(data)}\n`,
-          headers: [
-            ["x-chunked-output", "1"],
-            ["content-type", "application/json"]
-          ]
-        })
-      }
-      case "/api/v0/config/show": {
-        const data = await ipfs.daemon.config.get()
-        return encodeDaemonResponse({
-          url: request.url,
-          body: data
-        })
-      }
-      case "/api/v0/config/get": {
-      }
-      case "/api/v0/swarm/peers": {
-        const { verbose } = new ParamDecoder(searchParams)
-        const peers = await ipfs.daemon.swarm.peers({ verbose: verbose })
-        return encodeDaemonResponse({
-          url: request.url,
-          body: {
-            Peers: peers.map(({ peer, addr, latency }) => ({
-              Peer: peer.toB58String(),
-              Addr: addr.toString(),
-              Latency: latency
-            }))
-          }
-        })
-      }
-      case "/api/v0/files/stat": {
-        const { arg, hash, size, withLocal, cidBase } = new ParamDecoder(
-          searchParams
-        )
-
-        const stats = await ipfs.daemon.files.stat(arg || "/", {
-          hash,
-          size,
-          withLocal,
-          cidBase
-        })
-
-        return encodeDaemonResponse({
-          url: request.url,
-          body: {
-            Type: stats.type,
-            Blocks: stats.blocks,
-            Size: stats.size,
-            Hash: stats.hash,
-            CumulativeSize: stats.cumulativeSize,
-            WithLocality: stats.withLocality,
-            Local: stats.local,
-            SizeLocal: stats.sizeLocal
-          }
-        })
-      }
-      case "/api/v0/files/ls": {
-        const { arg, long, cidBase } = new ParamDecoder(searchParams)
-
-        const files = await ipfs.daemon.files.ls(arg || "/", {
-          long,
-          cidBase
-        })
-        return encodeDaemonResponse({
-          url: request.url,
-          body: {
-            Entries: files.map(entry => ({
-              Name: entry.name,
-              Type: entry.type,
-              Size: entry.size,
-              Hash: entry.hash
-            }))
-          }
-        })
-      }
-      case "/api/v0/files/read": {
-        const { arg, offset, length } = new ParamDecoder(searchParams)
-        const content = await ipfs.daemon.files.read(arg, { offset, length })
-        return encodeDaemonResponse({
-          url: request.url,
-          body: content.buffer,
-          headers: [["X-Stream-Output", "1"]]
-        })
-      }
-      case "/api/v0/files/cp": {
-        const {
-          args,
-          parents,
-          format,
-          hashAlg,
-          shardSplitThreshold
-        } = new ParamDecoder(searchParams)
-        const [from, to] = args
-
-        const data = await ipfs.daemon.files.cp(from, to, {
-          parents,
-          format,
-          hashAlg,
-          shardSplitThreshold
-        })
-        return encodeDaemonResponse({ url: request.url, body: data })
-      }
-      case "/api/v0/files/mv": {
-        const {
-          args,
-          parents,
-          format,
-          hashAlg,
-          shardSplitThreshold
-        } = new ParamDecoder(searchParams)
-        const [from, to] = args
-
-        const data = await ipfs.daemon.files.mv(from, to, {
-          parents,
-          format,
-          hashAlg,
-          shardSplitThreshold
-        })
-        return encodeDaemonResponse({ url: request.url, body: data })
-      }
-      case "/api/v0/files/mkdir": {
-        const {
-          arg,
-          parents,
-          format,
-          hashAlg,
-          shardSplitThreshold,
-          flush,
-          cidVersion
-        } = new ParamDecoder(searchParams)
-
-        const data = await ipfs.daemon.files.mkdir(arg, {
-          parents,
-          format,
-          hashAlg,
-          cidVersion,
-          flush,
-          shardSplitThreshold
-        })
-        return encodeDaemonResponse({ url: request.url, body: data })
-      }
-      case "/api/v0/files/rm": {
-        const { arg, recursive } = new ParamDecoder(searchParams)
-        const data = await ipfs.daemon.files.rm(arg, {
-          recursive
-        })
-        return encodeDaemonResponse({ url: request.url, body: data })
-      }
-      case "/api/v0/files/flush": {
-        const arg = searchParams.get("arg")
-        const data = await ipfs.daemon.files.flush(arg)
-        return encodeDaemonResponse({ url: request.url, body: data })
-      }
-      case "/api/v0/files/write": {
-        const {
-          arg,
-          offset,
-          length,
-          create,
-          truncate,
-          format,
-          parents,
-          rawLeaves,
-          cidVersion,
-          strategy,
-          progress,
-          flush,
-          hashAlg,
-          shardSplitThreshold
-        } = new ParamDecoder(searchParams)
-        const input = decodeRequest(request)
-        const formData = await input.formData()
-
-        for (const file of formData.values()) {
-          if (file instanceof File) {
-            const buffer = await readWith(reader =>
-              reader.readAsArrayBuffer(file)
-            )
-            const content = ipfs.Buffer.from(buffer)
-            const data = ipfs.daemon.files.write(arg, content, {
-              offset,
-              length,
-              create,
-              truncate,
-              rawLeaves,
-              cidVersion,
-              hashAlg,
-              format,
-              parents,
-              progress,
-              strategy,
-              flush,
-              shardSplitThreshold
-            })
-            return encodeDaemonResponse({ url: request.url, body: data })
-          }
+        // TODO: Report a bug to JS-IPFS as /api/v0/cid/base32 endpoint does not
+        // exist.
+        case "/api/v0/cid/base32": {
+          const arg = searchParams.get("arg")
+          const cid = new ipfs.CID(searchParams.get("arg"))
+          const base32CID = cid.toV1().toString("base32")
+          return encodeDaemonResponse({
+            url: request.url,
+            body: { CidStr: arg, Formatted: base32CID }
+          })
         }
-
-        throw Error("Please only send one file")
-      }
-      default: {
-        if (pathname.startsWith("/ipfs/") || pathname.startsWith("/ipns/")) {
-          return encodeResponse(
-            await ipfs.gatewayRequest(pathname),
-            request.url
+        case "/api/v0/bootstrap/add": {
+          const options = new ParamDecoder(searchParams)
+          const { arg } = options
+          const addr = arg || ipfs.daemon.multiaddr(arg)
+          const data = await ipfs.daemon.add(addr && addr.toString(), {
+            default: options.default
+          })
+          return encodeDaemonResponse({ url: request.url, body: data })
+        }
+        case "/api/v0/bootstrap/list": {
+          const data = await ipfs.daemon.list()
+          return encodeDaemonResponse({ url: request.url, body: data })
+        }
+        case "/api/v0/bootstrap/rm": {
+          const { arg, all } = new ParamDecoder(searchParams)
+          const addr = arg || ipfs.daemon.multiaddr(arg)
+          const data = await ipfs.daemon.bootstrap.rm(addr && addr.toString(), {
+            all
+          })
+          return encodeDaemonResponse({ url: request.url, body: data })
+        }
+        case "/api/v0/block/get": {
+          const key = new ipfs.CID(searchParams.get("arg"))
+          const block = await ipfs.daemon.block.get(key)
+          return encodeDaemonResponse({
+            url: request.url,
+            body: block.data.buffer,
+            headers: [["X-Stream-Output", "1"]]
+          })
+        }
+        case "/api/v0/block/put": {
+          const { mhtype, format, version, base } = new ParamDecoder(
+            searchParams
           )
-        } else {
-          throw Error(`Unsupported API endpoint ${pathname}`)
+          const data = await decodeFileBody(request)
+          const content = ipfs.Buffer.from(data)
+          const block = await ipfs.daemon.block.put(content, {
+            mhtype,
+            format,
+            version
+          })
+
+          return encodeDaemonResponse({
+            url: request.url,
+            body: {
+              Key: ipfs.cidToString(block.cid, { base }),
+              Size: block.data.length
+            }
+          })
+        }
+        case "/api/v0/block/rm": {
+          const key = new ipfs.CID(searchParams.get("arg"))
+          const data = await ipfs.daemon.block.rm(key)
+          return encodeDaemonResponse({ url: request.url, body: data })
+        }
+        case "/api/v0/block/stat": {
+          const { arg, base } = new ParamDecoder(searchParams)
+          const key = new ipfs.CID(arg)
+          const block = await ipfs.daemon.block.stat(key)
+          return encodeDaemonResponse({
+            url: request.url,
+            body: {
+              Key: ipfs.cidToString(block.cid, { base }),
+              Size: block.data.length
+            }
+          })
+        }
+        case "/api/v0/object/new": {
+          const { arg, base } = new ParamDecoder(searchParams)
+          const cid = await ipfs.daemon.object.new(arg)
+          const body = await ipfs.object$get(cid, base, false)
+          return encodeDaemonResponse({
+            url: request.url,
+            body
+          })
+        }
+        case "/api/v0/object/get": {
+          const { arg, base, enc, dataEncoding } = new ParamDecoder(
+            searchParams
+          )
+          const upgrade = false
+          const key = new ipfs.CID(arg)
+          const body = await ipfs.object$get(key, base, false, dataEncoding)
+          return encodeDaemonResponse({
+            url: request.url,
+            body
+          })
+        }
+        case "/api/v0/object/put": {
+          const { arg, inputenc, base } = new ParamDecoder(searchParams)
+          const upgrade = false
+          const body = await decodeFileBody(request)
+          if (inputenc === "protobuf") {
+            const content = ipfs.Buffer.from(body)
+            const node = await ipfs.dagPB.util.deserialize(content)
+            const cid = await ipfs.dagPB.util.cid(node)
+            const { data, size, links } = node.toJSON()
+            return encodeDaemonResponse({
+              url: request.url,
+              body: {
+                Data: data,
+                Hash: ipfs.cidToString(cid, { base, upgrade }),
+                Size: size,
+                Links: links.map(link => {
+                  return {
+                    Name: link.name,
+                    Size: link.size,
+                    Hash: ipfs.cidToString(link.cid, { base, upgrade })
+                  }
+                })
+              }
+            })
+          }
+          return encodeDaemonResponse({
+            url: request.url,
+            body
+          })
+        }
+        case "/api/v0/object/stat": {
+          const { arg, base } = new ParamDecoder(searchParams)
+          const upgrade = false
+          const key = new ipfs.CID(arg)
+          const stats = await ipfs.daemon.object.stat(key)
+          const data = {
+            Hash: ipfs.cidToString(stats.Hash, { base, upgrade }),
+            ...stats
+          }
+          return encodeDaemonResponse({ url: request.url, body: data })
+        }
+        case "/api/v0/object/data": {
+          const { arg, base } = new ParamDecoder(searchParams)
+          const upgrade = false
+          const key = new ipfs.CID(arg)
+          const data = await ipfs.daemon.object.data(key)
+          return encodeDaemonResponse({ url: request.url, body: data.buffer })
+        }
+        case "/api/v0/object/links": {
+          const { arg, base } = new ParamDecoder(searchParams)
+          const key = new ipfs.CID(arg)
+          const { Hash, Links } = await ipfs.object$get(key, base, false)
+          return encodeDaemonResponse({
+            url: request.url,
+            body: { Hash, Links }
+          })
+        }
+        case "/api/v0/object/patch/append-data": {
+          const { arg, inputenc, base } = new ParamDecoder(searchParams)
+          const upgrade = false
+          const key = new ipfs.CID(arg)
+          const body = await decodeFileBody(request)
+          const content = ipfs.Buffer.from(body)
+          const cid = await ipfs.daemon.object.patch.appendData(key, content)
+          const data = await ipfs.object$get(cid, base, false)
+          return encodeDaemonResponse({
+            url: request.url,
+            body: data
+          })
+        }
+        case "/api/v0/object/patch/set-data": {
+          const { arg, inputenc, base } = new ParamDecoder(searchParams)
+          const key = new ipfs.CID(arg)
+          const upgrade = false
+          const body = await decodeFileBody(request)
+          const content = ipfs.Buffer.from(body)
+          const cid = await ipfs.daemon.object.patch.setData(key, content)
+          const { Hash, Links } = await ipfs.object$get(cid, base, false)
+          return encodeDaemonResponse({
+            url: request.url,
+            body: { Hash, Links }
+          })
+        }
+        case "/api/v0/object/patch/add-link": {
+          const { args, base } = new ParamDecoder(searchParams)
+          const [root, name, ref] = args
+          const rootCID = new ipfs.CID(root)
+          const refCID = new ipfs.CID(ref)
+          const node = await ipfs.daemon.object.get(rootCID)
+          const link = new ipfs.dagPB.DAGLink(name, node.size, refCID)
+          const cid = await ipfs.daemon.object.patch.addLink(rootCID, link)
+          const body = await ipfs.object$get(cid, base, false)
+          return encodeDaemonResponse({
+            url: request.url,
+            body
+          })
+        }
+        case "/api/v0/object/patch/rm-link": {
+          const { args, base } = new ParamDecoder(searchParams)
+          const [root, link] = args
+          const rootCID = new ipfs.CID(root)
+          const cid = await ipfs.daemon.object.patch.rmLink(rootCID, {
+            name: link
+          })
+          const body = await ipfs.object$get(cid, base, false)
+          return encodeDaemonResponse({
+            url: request.url,
+            body
+          })
+        }
+        case "/api/v0/pin/add": {
+          const { arg, recursive, base } = new ParamDecoder(searchParams)
+          const pins = await ipfs.daemon.pin.add(arg, { recursive })
+          return encodeDaemonResponse({
+            url: request.url,
+            body: {
+              Pins: pins.map(pin => ipfs.cidToString(pin.hash, { base }))
+            }
+          })
+        }
+        case "/api/v0/pin/rm": {
+          const { arg, recursive, base } = new ParamDecoder(searchParams)
+          const pins = await ipfs.daemon.pin.rm(arg, { recursive })
+          return encodeDaemonResponse({
+            url: request.url,
+            body: {
+              Pins: pins.map(pin => ipfs.cidToString(pin.hash, { base }))
+            }
+          })
+        }
+        case "/api/v0/pin/ls": {
+          const { arg, recursive, base } = new ParamDecoder(searchParams)
+          const pins = await ipfs.daemon.pin.ls(arg)
+          const pinset = {}
+          for (const { hash, type } of pins) {
+            pinset[ipfs.cidToString(hash, { base })] = { Type: type }
+          }
+          return encodeDaemonResponse({
+            url: request.url,
+            body: { Keys: pinset }
+          })
+        }
+        case "/api/v0/dns": {
+          const path = await ipfs.daemon.dns(searchParams.get("arg"))
+          return encodeDaemonResponse({
+            url: request.url,
+            body: { Path: path }
+          })
+        }
+        case "/api/v0/add": {
+          const input = decodeRequest(request)
+          const formData = await input.formData()
+          const base = searchParams.get("cid-base")
+          const files = []
+          for (const file of formData.values()) {
+            if (file instanceof File) {
+              const buffer = await readWith(reader =>
+                reader.readAsArrayBuffer(file)
+              )
+              const content = ipfs.Buffer.from(buffer)
+              files.push({ path: file.name, content })
+            }
+          }
+
+          const result = await ipfs.daemon.add(files)
+          const data = result.map(file => ({
+            Name: file.path, // addPullStream already turned this into a hash if it wanted to
+            Hash: ipfs.cidToString(file.hash, { base }),
+            Size: file.size
+          }))
+
+          return encodeDaemonResponse({
+            url: request.url,
+            body: data.length === 1 ? data[0] : data
+          })
+        }
+        case "/api/v0/get": {
+          const { arg } = new ParamDecoder(searchParams)
+          const files = await ipfs.daemon.get(arg)
+          const pack = self.tar.pack()
+          for (const file of files) {
+            if (file.content) {
+              const header = { name: file.path, size: file.size }
+              await callout(cb => pack.entry(header, file.content, cb))
+            } else {
+              const header = { type: "directory", name: file.path }
+              await callout(cb => pack.entry(header, cb))
+            }
+          }
+          pack.finalize()
+
+          const blob = await nodeSreamAsBlob(pack)
+          const buffer = await readWith(reader =>
+            reader.readAsArrayBuffer(blob)
+          )
+
+          return encodeDaemonResponse({
+            url: request.url,
+            body: buffer,
+            headers: [["X-Stream-Output", "1"]]
+          })
+        }
+        case "/api/v0/cat": {
+          const { arg, offset, length } = new ParamDecoder(searchParams)
+          const content /*:Uint8Array*/ = await ipfs.daemon.cat(arg, {
+            offset,
+            length
+          })
+          const { buffer, byteOffset, byteLength } = content
+          return encodeDaemonResponse({
+            url: request.url,
+            body:
+              byteLength === 0 && buffer.byteLength === byteLength
+                ? buffer
+                : buffer.slice(byteOffset, byteOffset + byteLength)
+          })
+        }
+        case "/api/v0/stats/bw": {
+          const { peer, proto, poll, interval } = new ParamDecoder(searchParams)
+
+          const data = await ipfs.daemon.stats.bw({
+            peer,
+            proto,
+            poll,
+            interval
+          })
+
+          return encodeDaemonResponse({
+            url: request.url,
+            body: `${encodeBandwidth(data)}\n`,
+            headers: [
+              ["x-chunked-output", "1"],
+              ["content-type", "application/json"]
+            ]
+          })
+        }
+        case "/api/v0/config/show": {
+          const data = await ipfs.daemon.config.get()
+          return encodeDaemonResponse({
+            url: request.url,
+            body: data
+          })
+        }
+        case "/api/v0/config/get": {
+        }
+        case "/api/v0/swarm/peers": {
+          const { verbose } = new ParamDecoder(searchParams)
+          const peers = await ipfs.daemon.swarm.peers({ verbose: verbose })
+          return encodeDaemonResponse({
+            url: request.url,
+            body: {
+              Peers: peers.map(({ peer, addr, latency }) => ({
+                Peer: peer.toB58String(),
+                Addr: addr.toString(),
+                Latency: latency
+              }))
+            }
+          })
+        }
+        case "/api/v0/files/stat": {
+          const { arg, hash, size, withLocal, cidBase } = new ParamDecoder(
+            searchParams
+          )
+
+          const stats = await ipfs.daemon.files.stat(arg || "/", {
+            hash,
+            size,
+            withLocal,
+            cidBase
+          })
+
+          return encodeDaemonResponse({
+            url: request.url,
+            body: {
+              Type: stats.type,
+              Blocks: stats.blocks,
+              Size: stats.size,
+              Hash: stats.hash,
+              CumulativeSize: stats.cumulativeSize,
+              WithLocality: stats.withLocality,
+              Local: stats.local,
+              SizeLocal: stats.sizeLocal
+            }
+          })
+        }
+        case "/api/v0/files/ls": {
+          const { arg, long, cidBase } = new ParamDecoder(searchParams)
+
+          const files = await ipfs.daemon.files.ls(arg || "/", {
+            long,
+            cidBase
+          })
+          return encodeDaemonResponse({
+            url: request.url,
+            body: {
+              Entries: files.map(entry => ({
+                Name: entry.name,
+                Type: entry.type,
+                Size: entry.size,
+                Hash: entry.hash
+              }))
+            }
+          })
+        }
+        case "/api/v0/files/read": {
+          const { arg, offset, length } = new ParamDecoder(searchParams)
+          const content = await ipfs.daemon.files.read(arg, { offset, length })
+          return encodeDaemonResponse({
+            url: request.url,
+            body: content.buffer,
+            headers: [["X-Stream-Output", "1"]]
+          })
+        }
+        case "/api/v0/files/cp": {
+          const {
+            args,
+            parents,
+            format,
+            hashAlg,
+            shardSplitThreshold
+          } = new ParamDecoder(searchParams)
+          const [from, to] = args
+
+          const data = await ipfs.daemon.files.cp(from, to, {
+            parents,
+            format,
+            hashAlg,
+            shardSplitThreshold
+          })
+          return encodeDaemonResponse({ url: request.url, body: data })
+        }
+        case "/api/v0/files/mv": {
+          const {
+            args,
+            parents,
+            format,
+            hashAlg,
+            shardSplitThreshold
+          } = new ParamDecoder(searchParams)
+          const [from, to] = args
+
+          const data = await ipfs.daemon.files.mv(from, to, {
+            parents,
+            format,
+            hashAlg,
+            shardSplitThreshold
+          })
+          return encodeDaemonResponse({ url: request.url, body: data })
+        }
+        case "/api/v0/files/mkdir": {
+          const {
+            arg,
+            parents,
+            format,
+            hashAlg,
+            shardSplitThreshold,
+            flush,
+            cidVersion
+          } = new ParamDecoder(searchParams)
+
+          const data = await ipfs.daemon.files.mkdir(arg, {
+            parents,
+            format,
+            hashAlg,
+            cidVersion,
+            flush,
+            shardSplitThreshold
+          })
+          return encodeDaemonResponse({ url: request.url, body: data })
+        }
+        case "/api/v0/files/rm": {
+          const { arg, recursive } = new ParamDecoder(searchParams)
+          const data = await ipfs.daemon.files.rm(arg, {
+            recursive
+          })
+          return encodeDaemonResponse({ url: request.url, body: data })
+        }
+        case "/api/v0/files/flush": {
+          const arg = searchParams.get("arg")
+          const data = await ipfs.daemon.files.flush(arg)
+          return encodeDaemonResponse({ url: request.url, body: data })
+        }
+        case "/api/v0/files/write": {
+          const {
+            arg,
+            offset,
+            length,
+            create,
+            truncate,
+            format,
+            parents,
+            rawLeaves,
+            cidVersion,
+            strategy,
+            progress,
+            flush,
+            hashAlg,
+            shardSplitThreshold
+          } = new ParamDecoder(searchParams)
+          const input = decodeRequest(request)
+          const formData = await input.formData()
+
+          for (const file of formData.values()) {
+            if (file instanceof File) {
+              const buffer = await readWith(reader =>
+                reader.readAsArrayBuffer(file)
+              )
+              const content = ipfs.Buffer.from(buffer)
+              const data = await ipfs.daemon.files.write(arg, content, {
+                offset,
+                length,
+                create,
+                truncate,
+                rawLeaves,
+                cidVersion,
+                hashAlg,
+                format,
+                parents,
+                progress,
+                strategy,
+                flush,
+                shardSplitThreshold
+              })
+              return encodeDaemonResponse({ url: request.url, body: data })
+            }
+          }
+
+          throw Error("Please only send one file")
+        }
+        default: {
+          if (pathname.startsWith("/ipfs/") || pathname.startsWith("/ipns/")) {
+            return encodeResponse(
+              await ipfs.gatewayRequest(pathname),
+              request.url
+            )
+          } else {
+            return {
+              url: request.url,
+              body: `Unsupported API endpoint ${pathname}`,
+              headers: [],
+              status: 502,
+              statusText: `Unsupported API endpoint ${pathname}`,
+              redirected: false,
+              type: "default"
+            }
+          }
         }
       }
+    } catch (error) {
+      return {
+        url: request.url,
+        body: error.toString(),
+        headers: [],
+        status: 500,
+        statusText: "Internal Server Error",
+        redirected: false,
+        type: "default"
+      }
+    }
+  }
+  parseCID(input /*:string*/) {
+    try {
+      return new this.CID(input)
+    } catch (error) {
+      return null
     }
   }
   cidToString(
@@ -1115,4 +1197,4 @@ const onready = once("ready")
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
 
-SupervisorNode.new(new URLSearchParams(location.search))
+const service = SupervisorNode.new(new URLSearchParams(location.search))

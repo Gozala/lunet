@@ -1,5 +1,22 @@
 // @flow strict
 
+// Script is loaded into an application sandbox iframe. It registers a service
+// worker `./lunet.js` (which by default is just an imports from
+// `//lunet.link/proxy.js`) and establishes connection with an embedder by
+// sending a `MessagePort` to the parent document.
+// Script will listen for messages from the Service Worker and forward them
+// to the embedder via `MessagePort` and forward responses from `MessagePort`
+// back to the Service Worker. More simply it will act as a proxy requests
+// received by the Service Worker to the embedder.
+// Note: It this script along with all the service worker stuff is just
+// for a convenience, application may choose to use different service worker
+// implementation or do a direct calls to the embedder, there for API
+// limitations MUST be imposed by the embedder (which has a different Origin) to
+// ensure that application is sandboxed.
+// P.S. Application will be loaded from distinct origin keyed to the CID of the
+// appliaction code and have CSP set such that it will not be able to
+// communicate with any other host there for preventing tracking or sharing data
+// without user consent.
 /*::
 import * as Data from "./lunet/data.js"
 */
@@ -113,6 +130,14 @@ export class LunetClient {
           state,
           state
         }
+      },
+      "*"
+    )
+  }
+  ready() {
+    return top.postMessage(
+      {
+        type: "ready"
       },
       "*"
     )
@@ -232,10 +257,11 @@ const activate = async (client /*:LunetClient*/, event /*:any*/) => {
   const contentType = response.headers.get("content-type") || ""
   const mime = contentType.split(";").shift()
   if (mime === "text/html") {
-    activateDocument(response)
+    await activateDocument(response)
   } else {
-    activateBlob(response)
+    await activateBlob(response)
   }
+  client.ready()
 }
 
 const activateDocument = async response => {
@@ -341,6 +367,7 @@ export const respond = async (
   console.log("Client received response, forwarding to proxy", data)
 
   if (service) {
+    // noflow: postMessage type bug https://github.com/facebook/flow/pull/7817
     service.postMessage(data, transfer(data.response))
   } else {
     setStatus(client, "🚫")
@@ -368,6 +395,7 @@ const setStatus = (client, status) => {
 const when = (type, target) =>
   new Promise(resolve => target.addEventListener(type, resolve, { once: true }))
 
-const transfer = data => (data.body instanceof ArrayBuffer ? [data.body] : [])
+const transfer = (data /*:{body:Data.Body}*/) /*:void|ArrayBuffer[]*/ =>
+  data.body instanceof ArrayBuffer ? [data.body] : undefined
 
 LunetClient.new(document)

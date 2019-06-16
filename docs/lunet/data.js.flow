@@ -4,7 +4,7 @@ export type Body = null | string | ArrayBuffer | Object
 
 export type EncodedRequest = {|
   url: string,
-  destination: string,
+  destination?: string,
   body: Body,
   cache?: CacheType,
   credentials?: CredentialsType,

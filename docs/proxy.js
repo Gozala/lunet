@@ -249,9 +249,10 @@ const readResponse = async (port /*:MessagePort*/) =>
             }
           }
         }
+        return undefined
       },
       cancel(reason) {
-        port.postMessage({ type: "cancel", cancel: reason })
+        return port.postMessage({ type: "cancel", cancel: reason })
       }
     })
   })
