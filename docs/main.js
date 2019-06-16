@@ -1051,14 +1051,14 @@ class Address {
     const locator = input.slice(match.index + 1).replace(/^\/+/, "")
     if (locator === "") {
       if (match[0] === ":") {
-        return new Address(protocol, "", "/")
+        return new Address(protocol, "", "")
       } else {
-        return new Address("", protocol, "/")
+        return new Address("", protocol, "")
       }
     } else {
       const index = locator.indexOf("/")
       if (index < 0) {
-        return new Address(protocol, locator, "/")
+        return new Address(protocol, locator, "")
       } else {
         const authority = locator.slice(0, index)
         const pathname = locator.slice(index)
