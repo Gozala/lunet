@@ -1203,7 +1203,6 @@ class IPFSDriver /*::implements Driver*/ {
   address:Address;
   cid:string;
   origin:string;
-  base:string
   */
   constructor(
     service /*:IPFSService*/,
@@ -1215,15 +1214,9 @@ class IPFSDriver /*::implements Driver*/ {
     this.address = address
     this.cid = cid
     this.origin = origin
-
-    const { pathname } = address
-    const path = pathname.endsWith("/")
-      ? pathname.slice(0, pathname.length - 1)
-      : pathname
-    this.base = `/ipfs/${cid}${path}`
   }
   resolvePath(path /*:string*/ = "") {
-    return `${this.base}${path}`
+    return `/ipfs/${this.cid}${path}`
   }
   async fetch(path /*:string*/) {
     const url = new URL(this.resolvePath(path), BASE_URL)
