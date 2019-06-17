@@ -60,6 +60,13 @@ export type ResponseMessage = {
   response: EncodedResponse
 }
 
+export type LoadMessage = {
+  type: "load",
+  location: string,
+  content: Body,
+  contentType: string
+}
+
 export type RequestMessage = {
   type: "request",
   id: string,
@@ -71,6 +78,11 @@ export type Response = {
   data: ResponseMessage,
   ports: MessagePort[],
   source: ServiceWorker
+}
+
+export type Load = {
+  type: "message",
+  data: LoadMessage
 }
 
 export interface Request {
@@ -161,14 +173,21 @@ export type BeforeUnloadMessage = {
   beforeunload: null
 }
 
-export interface LunetMessage {
-  +data: LunetMessageData;
+export interface AgentInbox {
+  +data: AgentIncomingMessage;
   ports: MessagePort[];
   target: MessagePort;
   origin: string;
 }
 
-export type LunetMessageData =
+export interface ClientInbox {
+  +data: ClientIncomingMessage;
+  ports: MessagePort[];
+  target: MessagePort;
+  origin: string;
+}
+
+export type AgentIncomingMessage =
   | ConnectMessage
   | RequestMessage
   | HashChangeMessage
@@ -176,3 +195,5 @@ export type LunetMessageData =
   | PushStateMessage
   | ReplaceStateMessage
   | BeforeUnloadMessage
+
+export type ClientIncomingMessage = ResponseMessage | LoadMessage
