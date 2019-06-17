@@ -753,7 +753,10 @@ class BrowserNode {
         }
         case "/api/v0/files/read": {
           const { arg, offset, length } = new ParamDecoder(searchParams)
-          const content = await ipfs.daemon.files.read(arg, { offset, length })
+          const content = await ipfs.daemon.files.read(arg, {
+            offset,
+            length
+          })
           return encodeDaemonResponse({
             url: request.url,
             body: content.buffer,
@@ -896,14 +899,26 @@ class BrowserNode {
         }
       }
     } catch (error) {
-      return {
-        url: request.url,
-        body: error.toString(),
-        headers: [],
-        status: 500,
-        statusText: "Internal Server Error",
-        redirected: false,
-        type: "default"
+      if (error.code === "ERR_NOT_FOUND") {
+        return {
+          url: request.url,
+          body: "null",
+          headers: [["content-type", "application/json"]],
+          status: 404,
+          statusText: "Not Found",
+          redirected: false,
+          type: "default"
+        }
+      } else {
+        return {
+          url: request.url,
+          body: error.toString(),
+          headers: [],
+          status: 500,
+          statusText: "Internal Server Error",
+          redirected: false,
+          type: "default"
+        }
       }
     }
   }
@@ -955,7 +970,7 @@ class BrowserNode {
 }
 
 const encodeDaemonResponse = (
-  response /*:{url:string, body:string | Object | ArrayBuffer, headers?:Array<[string, string]>}*/
+  response /*:{url:string, body:string | Object | ArrayBuffer, headers?:Array<[string, string]>, status?:number, statusText?:string}*/
 ) /*:Data.EncodedResponse*/ => {
   const [body, headers] =
     response.body instanceof ArrayBuffer
@@ -970,8 +985,8 @@ const encodeDaemonResponse = (
   return {
     url: response.url,
     body,
-    status: 200,
-    statusText: "Ok",
+    status: response.status || 200,
+    statusText: response.statusText || "Ok",
     headers,
     redirected: false,
     type: "default"
