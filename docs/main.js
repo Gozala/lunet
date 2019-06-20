@@ -1017,6 +1017,10 @@ class LocalIPFSResource /*::implements Resource*/ {
     this.service = service
     this.address = address
     this.encryption = encryption
+    // TODO: Needs a more reasonable solution
+    if (encryption) {
+      encryption.algorithm.iv = new Uint8Array(encryption.algorithm.iv)
+    }
   }
   static async read(service, path, { offset, length } /*:ReadOptions*/ = {}) {
     const params = SearchParams({ arg: path, offset, length })
@@ -1055,8 +1059,6 @@ class LocalIPFSResource /*::implements Resource*/ {
     const keychain = file.ok ? await file.json() : null
     if (keychain) {
       const { data, algorithm } = keychain.base
-      // TODO: Needs a more reasonable solution
-      algorithm.iv = new Uint8Array(algorithm.iv)
       const key = await window.crypto.subtle.importKey(
         "jwk",
         data,
@@ -1075,7 +1077,7 @@ class LocalIPFSResource /*::implements Resource*/ {
     const algorithm = {
       name: "AES-GCM",
       length: 256,
-      iv: [iv]
+      iv: [...iv]
     }
     const key = await window.crypto.subtle.generateKey(algorithm, true, [
       "encrypt",
