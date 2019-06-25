@@ -424,6 +424,15 @@ export class UserAgent {
   //     } catch (error) {}
   //   }
   // }
+  async open(path /*:string*/, options /*:OpenOptions*/) {
+    const result = await this.drive.open(path, options)
+    const { opened } = this.drive
+    if (opened != null) {
+      this.mountAddress = opened.resource.address
+      this.ownerDocument.defaultView.history.pushState(null, "", this.pathname)
+    }
+    return result
+  }
   async handleRequest(request /*:Request*/) /*:Promise<Response>*/ {
     const { method } = request
     const { hostname, pathname, origin, searchParams } = new URL(request.url)
@@ -505,7 +514,7 @@ export class UserAgent {
           }
           case "OPEN": {
             return this.response(
-              this.drive.open(path, {
+              this.open(path, {
                 create: searchParams.get("create"),
                 new: decodeBooleanParam(searchParams, "new") || false
               })
@@ -895,31 +904,61 @@ class IPFSResource /*::implements Resource*/ {
   address:Address
   origin:string
   cid:string
+  encryption:?Encryption
   */
-  constructor(service /*:IPFSService*/, address /*:Address*/, cid /*:string*/) {
+  constructor(
+    service /*:IPFSService*/,
+    address /*:Address*/,
+    cid /*:string*/,
+    encryption /*:?Encryption*/
+  ) {
     this.service = service
     this.address = address
     this.cid = cid
+    this.encryption = encryption
+    // TODO: Needs a more reasonable solution
+    if (encryption) {
+      encryption.algorithm.iv = new Uint8Array(encryption.algorithm.iv)
+    }
   }
   get open() {
     return false
   }
+  get writable() {
+    return false
+  }
   static async mount(service /*:IPFSService*/, address /*:Address*/) {
+    const cid = await this.resolveCID(service, address)
+    const base = `/ipfs/${cid}${address.pathname}`
+    const path = Path.resolve(Path.directory(base), ".keychain")
+    const file = await this.read(service, path)
+    const keychain = file.ok ? await file.json() : null
+    if (keychain) {
+      const { data, algorithm } = keychain.base
+      const key = await window.crypto.subtle.importKey(
+        "jwk",
+        data,
+        algorithm,
+        true,
+        ["encrypt", "decrypt"]
+      )
+      return new IPFSResource(service, address, cid, { key, algorithm })
+    } else {
+      return new IPFSResource(service, address, cid, null)
+    }
+  }
+  static async resolveCID(service /*:IPFSService*/, address /*:Address*/) {
     const { protocol, authority } = address
     switch (protocol) {
       case "ipfs": {
         const cid = authority
-        return new IPFSResource(service, address, cid)
+        return cid
       }
       case "ipns":
       // if protocol unknown assume ipns
       case "": {
-        // const name = authority.includes(".")
-        //   ? await service.resolveDNSLink(authority)
-        //   : authority
-
         const { cid } = await service.resolveName(authority)
-        return new IPFSResource(service, address, cid)
+        return cid
       }
       default: {
         throw RangeError(
@@ -929,29 +968,24 @@ class IPFSResource /*::implements Resource*/ {
     }
   }
 
-  resolvePath(path /*:string*/) {
-    return `/ipfs/${this.cid}${this.address.pathname}data${path}`
-  }
-  async stat(path /*:string*/) {
-    const arg = this.resolvePath(path)
-    const url = new URL(`/api/v0/files/stat?arg=${arg}`, BASE_URL)
+  static async stat(service, path /*:string*/) {
+    const url = new URL(`/api/v0/files/stat?arg=${path}`, BASE_URL)
 
-    const response = await this.service.fetch(url)
+    const response = await service.fetch(url)
     if (response.status === 200) {
       const { Type: type, CumulativeSize: size } = await response.json()
-      return { type, size, open: this.open }
+      return { type, size }
     } else {
       return null
     }
   }
-  async list(path /*:string*/) {
+  static async list(service, path /*:string*/) {
     //   // TODO: Figure out why `/api/v0/files/ls` does not work here.
-    const arg = this.resolvePath(path)
-    const url = new URL(`/api/v0/file/ls?arg=${arg}`, BASE_URL)
-    const response = await this.service.fetch(url)
+    const url = new URL(`/api/v0/file/ls?arg=${path}`, BASE_URL)
+    const response = await service.fetch(url)
     if (response.ok) {
       const { Objects, Arguments } = await response.json()
-      const entry = Objects[Arguments[arg]]
+      const entry = Objects[Arguments[path]]
       switch (entry.Type) {
         case "File": {
           return []
@@ -969,24 +1003,95 @@ class IPFSResource /*::implements Resource*/ {
       throw new Error(message)
     }
   }
-  async watch(path /*:string*/) {
-    throw new Error("Can only watch local resources")
-  }
-  async read(path /*:string*/, { offset, length } /*:ReadOptions*/ = {}) {
-    const arg = this.resolvePath(path)
-    const params = SearchParams({ arg, offset, length })
+  static async read(
+    service /*:IPFSService*/,
+    path /*:string*/,
+    { offset, length } /*:ReadOptions*/ = {}
+  ) {
+    const params = SearchParams({ arg: path, offset, length })
     const url = new URL(`/api/v0/cat?${params.toString()}`, BASE_URL)
-    return await this.service.fetch(url)
+    return await service.fetch(url)
   }
-  async write(
+  static async write(
+    service /*:IPFSService*/,
     path /*:string*/,
     content /*:Request|Response*/,
     options /*:WriteOptions*/ = {}
   ) {
-    throw new Error("Can not write into remote resource")
+    throw new Error("Resource is readable only")
   }
-  async delete(path /*:string*/, options /*:DeletOptions*/ = {}) {
-    throw new Error("Can not delete remote resource")
+  static async delete(
+    service /*:IPFSService*/,
+    path /*:string*/,
+    options /*:DeletOptions*/ = {}
+  ) {
+    throw new Error("Resource is readable only")
+  }
+
+  resolvePath(path /*:string*/) {
+    const subpath = Path.resolve(Path.directory(this.address.pathname), path)
+    return `/ipfs/${this.cid}${subpath}`
+  }
+  async stat(path /*:string*/) {
+    const stat = await IPFSResource.stat(this.service, this.resolvePath(path))
+    return { ...stat, open: this.open }
+  }
+  async list(path /*:string*/) {
+    return await IPFSResource.list(this.service, this.resolvePath(path))
+  }
+  async watch(path /*:string*/) {
+    throw new Error("Can only watch local resources")
+  }
+  async read(path /*:string*/, options /*::?:ReadOptions*/) {
+    const { encryption, service } = this
+    const arg = this.resolvePath(path)
+    const content = await IPFSResource.read(
+      service,
+      this.resolvePath(path),
+      options
+    )
+    if (encryption) {
+      const buffer = await content.arrayBuffer()
+      const data = await window.crypto.subtle.decrypt(
+        encryption.algorithm,
+        encryption.key,
+        buffer
+      )
+      return new Response(data)
+    } else {
+      return content
+    }
+  }
+  async write(
+    path /*:string*/,
+    content /*:Request|Response*/,
+    options /*::?:WriteOptions*/
+  ) {
+    const { encryption, service } = this
+    let body = content
+    if (encryption) {
+      const buffer = await content.arrayBuffer()
+      const data = await window.crypto.subtle.encrypt(
+        encryption.algorithm,
+        encryption.key,
+        buffer
+      )
+      body = new Response(data)
+    }
+
+    return await IPFSResource.write(
+      service,
+      this.resolvePath(path),
+      body,
+      options
+    )
+  }
+  async delete(path /*:string*/, options /*::?:DeletOptions*/) {
+    return await IPFSResource.delete(
+      this.service,
+      this.resolvePath(path),
+      options
+    )
   }
 }
 
@@ -1022,6 +1127,35 @@ class LocalIPFSResource /*::implements Resource*/ {
       encryption.algorithm.iv = new Uint8Array(encryption.algorithm.iv)
     }
   }
+  get writable() {
+    return this.open
+  }
+  static async stat(service, path) {
+    const url = new URL(`/api/v0/files/stat?arg=${path}`, BASE_URL)
+
+    const response = await service.fetch(url)
+    if (response.status === 200) {
+      const { Type: type, CumulativeSize: size } = await response.json()
+      return { type, size }
+    } else {
+      return null
+    }
+  }
+  static async list(service, path) {
+    const url = new URL(`/api/v0/files/ls?l=1&arg=${path}`, BASE_URL)
+    const response = await service.fetch(url)
+    if (response.ok) {
+      const { Entries } = await response.json()
+      const entries = Entries.map(entry => ({
+        type: entry.Type === 0 ? "file" : "directory",
+        name: entry.Name,
+        size: entry.Size
+      }))
+      return entries
+    } else {
+      throw new Error(response.statusText)
+    }
+  }
   static async read(service, path, { offset, length } /*:ReadOptions*/ = {}) {
     const params = SearchParams({ arg: path, offset, length })
     const url = new URL(`/api/v0/files/read?${params.toString()}`, BASE_URL)
@@ -1046,6 +1180,18 @@ class LocalIPFSResource /*::implements Resource*/ {
     formData.append("file", blob)
     const request = new Request(url, { method: "POST", body: formData })
     const response = await service.fetch(request)
+    if (!response.ok) {
+      throw Error(await response.text())
+    }
+  }
+  static async delete(
+    service /*:IPFSService*/,
+    path /*:string*/,
+    { recursive } /*:DeletOptions*/ = {}
+  ) {
+    const params = SearchParams({ arg: path, r: recursive })
+    const url = new URL(`/api/v0/files/rm?${params.toString()}`, BASE_URL)
+    const response = await service.fetch(url)
     if (!response.ok) {
       throw Error(await response.text())
     }
@@ -1099,32 +1245,14 @@ class LocalIPFSResource /*::implements Resource*/ {
   }
 
   async stat(path /*:string*/) {
-    const arg = this.resolvePath(path)
-    const url = new URL(`/api/v0/files/stat?arg=${arg}`, BASE_URL)
-
-    const response = await this.service.fetch(url)
-    if (response.status === 200) {
-      const { Type: type, CumulativeSize: size } = await response.json()
-      return { type, size, open: this.open }
-    } else {
-      return null
-    }
+    const stat = await LocalIPFSResource.stat(
+      this.service,
+      this.resolvePath(path)
+    )
+    return { ...stat, open: this.open }
   }
   async list(path /*:string*/) {
-    const arg = this.resolvePath(path)
-    const url = new URL(`/api/v0/files/ls?l=1&arg=${arg}`, BASE_URL)
-    const response = await this.service.fetch(url)
-    if (response.ok) {
-      const { Entries } = await response.json()
-      const entries = Entries.map(entry => ({
-        type: entry.Type === 0 ? "file" : "directory",
-        name: entry.Name,
-        size: entry.Size
-      }))
-      return entries
-    } else {
-      throw new Error(response.statusText)
-    }
+    return LocalIPFSResource.list(this.service, this.resolvePath(path))
   }
   async watch(path /*:string*/) {
     throw new Error("Watch API is not yet implemented")
@@ -1173,14 +1301,12 @@ class LocalIPFSResource /*::implements Resource*/ {
       options
     )
   }
-  async delete(path /*:string*/, { recursive } /*:DeletOptions*/ = {}) {
-    const arg = this.resolvePath(path)
-    const params = new SearchParams({ arg, r: recursive })
-    const url = new URL(`/api/v0/files/rm?${params.toString()}`, BASE_URL)
-    const response = await this.service.fetch(url)
-    if (!response.ok) {
-      throw Error(await response.text())
-    }
+  async delete(path /*:string*/, options /*::?:DeletOptions*/ = {}) {
+    return await LocalIPFSResource.delete(
+      this.service,
+      this.resolvePath(path),
+      options
+    )
   }
 }
 
@@ -1259,14 +1385,17 @@ class IPFSDrive /*::implements Drive*/ {
           const pathname = `${path}${name}`
           const open = type === "data" && pathname === openedPath
 
-          return { name, type, path: pathname, open }
+          return { name, type, path: pathname, open, writable: open }
         })
 
-        if (path === "/" && this.opened) {
-          entries.unshift({
+        const { opened } = this
+
+        if (path === "/" && opened) {
+          entries.push({
             name: "@",
             path: "/@",
             open: true,
+            writable: opened.resource.writable,
             type: "data"
           })
         }
@@ -1787,6 +1916,7 @@ interface DeletOptions {
 
 interface Resource {
   +open:boolean;
+  +writable:boolean;
   +address:Address;
   stat(string):Promise<?Stat>;
   list(string):Promise<Entry[]>;
@@ -1817,6 +1947,8 @@ type DriveEntry =
   | { type: "document", name:string, open:boolean, path:string }
 
 interface Drive {
+  opened:?{path:string, resource:Resource};
+
   stat(string):Promise<?Stat>;
   list(path:string):Promise<DriveEntry[]>;
   open(path:string, OpenOptions):Promise<{path:string, address:string}>;
@@ -1826,6 +1958,15 @@ interface Drive {
   delete(string, options?:DeletOptions):Promise<void>;
 }
 */
+
+class Path {
+  static resolve(base /*:string*/, path /*:string*/) {
+    return new URL(path, new URL(base, BASE_URL)).pathname
+  }
+  static directory(path /*:string*/) {
+    return path.endsWith("/") ? path : `${path}/`
+  }
+}
 
 const base32Encode = (bytes, alphabet = "0123456789abcdefghjkmnpqrstvwxyz") => {
   let [shift, carry, result] = [3, 0, ""]
