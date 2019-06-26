@@ -1234,6 +1234,7 @@ class LocalIPFSResource /*::implements Resource*/ {
 
     await this.write(service, `${path}/.keychain`, new Response(body), {
       create: true,
+      truncate: true,
       parents: true
     })
 
