@@ -123,7 +123,7 @@ export class UserAgent {
 
     if (mountAddress) {
       const resource = await this.createMount(mountAddress)
-      drive.mount("/@", resource)
+      drive.mount(resource)
     }
 
     this.driver = driver
@@ -1458,13 +1458,17 @@ class IPFSDrive /*::implements Drive*/ {
         options.create != null
           ? await LocalIPFSResource.create(this.service, address, true)
           : await LocalIPFSResource.mount(this.service, address, true)
-      return this.mount(path, resource)
+      return this.mount(resource)
     }
   }
   async select(path) {
     throw Error(`Data source selector is not implemented`)
   }
-  async mount(path, resource /*:Resource*/) {
+  async mount(resource /*:Resource*/) {
+    const path =
+      this.authority === resource.address.authority
+        ? resource.address.pathname
+        : "/@"
     this.opened = { path, resource }
     return { path, address: resource.toString() }
   }
