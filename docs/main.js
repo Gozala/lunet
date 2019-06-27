@@ -1232,7 +1232,7 @@ class IPFSDrive /*::implements Drive*/ {
 
           return entries
         } else if (response.status === 404) {
-          if (path === "/") {
+          if (path === "/data/") {
             return []
           } else {
             throw Error("Not such resource")
