@@ -381,7 +381,8 @@ export class LunetClient {
     }
   }
   beforeunload(event /*:Event*/) {
-    event.preventDefault()
+    // This causes prompts in firefox which we really don't want.
+    // event.preventDefault()
     return top.postMessage(
       {
         type: "beforeunload",
