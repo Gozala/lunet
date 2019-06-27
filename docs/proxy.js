@@ -5,7 +5,7 @@ import * as Data from "./lunet/data.js"
 */
 
 const NAME = "proxy"
-const VERSION = "0.0.7"
+const VERSION = "0.0.8"
 const ID = `${NAME}@${VERSION}`
 const lunetURL = new URL("https://lunet.link/")
 const daemonURL = new URL("http://127.0.0.1:5001/")

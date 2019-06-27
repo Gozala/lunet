@@ -1,7 +1,7 @@
 // @flow strict
 
 const NAME = "service"
-const VERSION = "0.0.5"
+const VERSION = "0.0.8"
 const ID = `${NAME}@${VERSION}`
 const serviceURL = new URL("https://lunet.link/")
 

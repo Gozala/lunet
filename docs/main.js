@@ -73,7 +73,7 @@ export class UserAgent {
   }
   async activate() {
     this.listen()
-    // this.activateServiceWorker()
+    this.activateServiceWorker()
     await this.load()
   }
   listen() {
