@@ -627,7 +627,7 @@ class IPFSResource /*::implements Resource*/ {
     }
   }
   get authority() {
-    return this.address.authority
+    return this.cid
   }
   get open() {
     return false

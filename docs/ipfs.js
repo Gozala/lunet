@@ -94,14 +94,26 @@ class SupervisorNode {
         throw response
       }
     } catch (error) {
-      const response = await browser
-      port.postMessage(
-        { type: "response", id: request.id, response },
-        transfer(response)
-      )
+      try {
+        const response = await Promise.race([browser, timeout(5000)])
+        port.postMessage(
+          { type: "response", id: request.id, response },
+          transfer(response)
+        )
+      } catch (_) {
+        port.postMessage(
+          { type: "response", id: request.id, response: error },
+          transfer(error)
+        )
+      }
     }
   }
 }
+
+const timeout = ms =>
+  new Promise((resolve, reject) => {
+    setTimeout(reject, ms, new Error("Timeout"))
+  })
 
 const DAEMON_URL = new URL("http://127.0.0.1:5001")
 const GATEWAY_URL = new URL("http://127.0.0.1:8080")
