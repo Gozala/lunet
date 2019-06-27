@@ -1451,7 +1451,7 @@ class Connection {
     throw Error("Not implemented")
   }
   get sandbox() {
-    const sandbox = document.querySelector("iframe")
+    const sandbox = document.querySelector("iframe#fetch-service")
     if (sandbox == null) {
       const sandbox = document.createElement("iframe")
       sandbox.name = "fetch"
@@ -1463,6 +1463,7 @@ class Connection {
       Object.defineProperty(this, "sandbox", { value: sandbox })
       return sandbox
     } else {
+      // @noflow - sandbox is iframe, but frow does not know that
       Object.defineProperty(this, "sandbox", { value: sandbox })
       return sandbox
     }
@@ -1493,14 +1494,11 @@ class Connection {
   async onrequest(message /*:Data.RequestMessage*/) {
     const { id, request } = message
     try {
-      const response = await this.sandbox.contentWindow.fetch.fetch(
-        request.url,
-        {
-          method: request.method,
-          headers: decodeHeaders(request.headers),
-          body: request.body
-        }
-      )
+      const response = await this.sandbox.contentWindow.fetch(request.url, {
+        method: request.method,
+        headers: decodeHeaders(request.headers),
+        body: request.body
+      })
       const data = await encodeResponse(response)
       this.postMessage({ type: "response", id, response: data }, transfer(data))
     } catch (error) {
