@@ -138,7 +138,7 @@ export class LunetClient {
   async load({ location } /*:{location:string}*/) {
     history.replaceState(null, "", location)
     await this.controlled
-    const response = await fetch(location)
+    const response = await fetch("/")
     if (response.status === 404) {
       await this.loadIndex()
     } else {

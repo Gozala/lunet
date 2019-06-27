@@ -33,7 +33,7 @@ export class UserAgent {
   serviceWorkerStatus: ServiceWorkerStatus;
   serviceStatus:ServiceStatus;
 
-  driver:Driver
+  driver:Resource
   drive:Drive
 
   driverAddress:Address
@@ -110,23 +110,21 @@ export class UserAgent {
     const [mountAddress, driverAddress] =
       secondary == null ? [null, primary] : [primary, secondary]
 
-    this.driverAddress = driverAddress
-    this.frame.setAttribute("data-driver", driverAddress.toString())
-
-    this.mountAddress = mountAddress
-    if (mountAddress) {
-      this.frame.setAttribute("data-mount", mountAddress.toString())
-    }
-
-    const driver = await this.createDriver(driverAddress)
-    const drive = new IPFSDrive(this.services.ipfs, driverAddress.authority)
-
-    if (mountAddress) {
-      const resource = await this.createMount(mountAddress)
-      drive.mount(resource)
-    }
-
+    const driver = await this.resolveResource(driverAddress)
     this.driver = driver
+    this.driverAddress = driver.address
+    this.frame.setAttribute("data-driver", this.driverAddress.toString())
+
+    // const driver = await this.createDriver(driverAddress)
+    const drive = new IPFSDrive(this.services.ipfs, driver)
+
+    if (mountAddress) {
+      const resource = await this.resolveResource(mountAddress)
+      this.frame.setAttribute("data-mount", resource.address.toString())
+      await drive.mount(resource)
+    }
+
+    // this.driver = driver
     this.drive = drive
 
     this.search = search
@@ -140,7 +138,7 @@ export class UserAgent {
     const location = `${pathname}${search}${hash}`
     port.postMessage({ type: "load", location })
   }
-  async createMount(address /*:Address*/) /*:Promise<Resource>*/ {
+  async resolveResource(address /*:Address*/) /*:Promise<Resource>*/ {
     const service = this.services
     switch (address.protocol) {
       case "ipfs":
@@ -161,41 +159,41 @@ export class UserAgent {
         const { protocol, authority, pathname } = address
         const fallback = new Address("", protocol, `/${authority}${pathname}`)
         try {
-          return await this.createMount(fallback)
+          return await this.resolveResource(fallback)
         } catch (_) {
           throw RangeError(`Unsupported resource address ${address.toString()}`)
         }
       }
     }
   }
-  async createDriver(address /*:Address*/) /*:Promise<Driver>*/ {
-    const service = this.services
-    switch (address.protocol) {
-      case "ipfs":
-      case "ipns":
-        return await IPFSDriver.mount(service.ipfs, address)
-      case "local":
-        return await LocalIPFSDriver.mount(service.ipfs, address)
-      case "": {
-        // If protocol is unknown attempt to open as local resource
-        // first otherwise attempt to open as IPNS resource
-        try {
-          return await LocalIPFSDriver.mount(service.ipfs, address)
-        } catch (error) {
-          return await IPFSDriver.mount(service.ipfs, address)
-        }
-      }
-      default: {
-        const { protocol, authority, pathname } = address
-        const fallback = new Address("", protocol, `/${authority}${pathname}`)
-        try {
-          return await this.createDriver(fallback)
-        } catch (_) {
-          throw RangeError(`Unsupported resource address ${address.toString()}`)
-        }
-      }
-    }
-  }
+  // async createDriver(address /*:Address*/) /*:Promise<Driver>*/ {
+  //   const service = this.services
+  //   switch (address.protocol) {
+  //     case "ipfs":
+  //     case "ipns":
+  //       return await IPFSDriver.mount(service.ipfs, address)
+  //     case "local":
+  //       return await LocalIPFSDriver.mount(service.ipfs, address)
+  //     case "": {
+  //       // If protocol is unknown attempt to open as local resource
+  //       // first otherwise attempt to open as IPNS resource
+  //       try {
+  //         return await LocalIPFSDriver.mount(service.ipfs, address)
+  //       } catch (error) {
+  //         return await IPFSDriver.mount(service.ipfs, address)
+  //       }
+  //     }
+  //     default: {
+  //       const { protocol, authority, pathname } = address
+  //       const fallback = new Address("", protocol, `/${authority}${pathname}`)
+  //       try {
+  //         return await this.createDriver(fallback)
+  //       } catch (_) {
+  //         throw RangeError(`Unsupported resource address ${address.toString()}`)
+  //       }
+  //     }
+  //   }
+  // }
   createFrame() {
     const iframe = this.ownerDocument.createElement("iframe")
     iframe.setAttribute("sandbox", SANDBOX_OPTIONS.join(" "))
@@ -246,10 +244,9 @@ export class UserAgent {
     return this.sandboxURL.origin
   }
   get pathname() {
-    const { driverAddress, mountAddress, hash, search } = this
-    const mount = mountAddress ? `${mountAddress.toString()}!` : ""
-    const driver = `${driverAddress.toString()}${search}${hash}`
-    return `${mount}${driver}`
+    const { driver, drive, hash, search } = this
+    const mount = drive.opened ? `${drive.opened.resource.pathname}!` : ""
+    return `${mount}${driver.pathname}${search}${hash}`
   }
   disconnectedCallback() {}
   handleEvent(event /*:any*/) {
@@ -438,150 +435,65 @@ export class UserAgent {
     const { hostname, pathname, origin, searchParams } = new URL(request.url)
 
     if (origin === this.sandboxOrigin) {
-      // if (pathname.startsWith("/data")) {
-      //   const path = pathname === "/data" ? "/" : pathname.substr(5)
-      //   switch (method) {
-      //     case "INFO": {
-      //       return this.response(this.stat(path))
-      //     }
-      //     case "LIST": {
-      //       return this.response(this.list(path))
-      //     }
-      //     case "GET": {
-      //       const { headers } = request
-      //       switch (headers.get("content-type")) {
-      //         case "text/event-stream": {
-      //           return await this.watch(path)
-      //         }
-      //         default: {
-      //           const offset = decodeIntParam(searchParams, "offset")
-      //           const length = decodeIntParam(searchParams, "length")
-      //           return this.response(this.read(path, { offset, length }))
-      //         }
-      //       }
-      //     }
-      //     case "DELETE": {
-      //       const recurse = decodeBooleanParam(searchParams, "recursive")
-      //       return this.response(this.delete(path, { recurse }))
-      //     }
-      //     case "PUT": {
-      //       const offset = decodeIntParam(searchParams, "offset")
-      //       const length = decodeIntParam(searchParams, "length")
-      //       const truncate = decodeBooleanParam(searchParams, "truncate")
-      //       const create = decodeBooleanParam(searchParams, "create")
-      //       const parents = decodeBooleanParam(searchParams, "parents")
-      //       const title = searchParams.get("title")
-
-      //       return this.response(
-      //         this.write(path, request, {
-      //           offset,
-      //           length,
-      //           truncate,
-      //           create,
-      //           parents,
-      //           title
-      //         })
-      //       )
-      //     }
-      //     case "POST": {
-      //       return new Response(
-      //         JSON.stringify({
-      //           error: `Write via POST method is not yet implemented`
-      //         }),
-      //         {
-      //           status: 501,
-      //           statusText: "Not Implemented"
-      //         }
-      //       )
-      //     }
-      //     default: {
-      //       return new Response(JSON.stringify({ error: "Bad Request" }), {
-      //         status: 400,
-      //         statusText: "Bad Request",
-      //         headers: { "content-type": "application/json" }
-      //       })
-      //     }
-      //   }
-      // } else
-      if (pathname.startsWith("/data")) {
-        const path = pathname === "/data" ? "/" : pathname.substr(5)
-        switch (method) {
-          case "INFO": {
-            return this.response(this.drive.stat(path))
-          }
-          case "LIST": {
-            return this.response(this.drive.list(path))
-          }
-          case "OPEN": {
-            return this.response(
-              this.open(path, {
-                create: searchParams.get("create"),
-                new: decodeBooleanParam(searchParams, "new") || false
-              })
-            )
-          }
-          case "GET": {
-            const { headers } = request
-            switch (headers.get("content-type")) {
-              case "text/event-stream": {
-                return this.response(this.drive.watch(path))
-              }
-              default: {
-                const offset = decodeIntParam(searchParams, "offset")
-                const length = decodeIntParam(searchParams, "length")
-                return this.response(this.drive.read(path, { offset, length }))
-              }
+      switch (method) {
+        case "INFO": {
+          return this.response(this.drive.stat(pathname))
+        }
+        case "LIST": {
+          return this.response(this.drive.list(pathname))
+        }
+        case "OPEN": {
+          return this.response(
+            this.open(pathname, {
+              create: searchParams.get("create"),
+              new: decodeBooleanParam(searchParams, "new") || false
+            })
+          )
+        }
+        case "GET": {
+          const { headers } = request
+          switch (headers.get("content-type")) {
+            case "text/event-stream": {
+              return this.response(this.drive.watch(pathname))
+            }
+            default: {
+              const offset = decodeIntParam(searchParams, "offset")
+              const length = decodeIntParam(searchParams, "length")
+              return this.response(
+                this.drive.read(pathname, { offset, length })
+              )
             }
           }
-          case "DELETE": {
-            const recurse = decodeBooleanParam(searchParams, "recursive")
-            return this.response(this.drive.delete(path, { recurse }))
-          }
-          case "PUT": {
-            const offset = decodeIntParam(searchParams, "offset")
-            const length = decodeIntParam(searchParams, "length")
-            const truncate = decodeBooleanParam(searchParams, "truncate")
-            const create = decodeBooleanParam(searchParams, "create")
-            const parents = decodeBooleanParam(searchParams, "parents")
-            const title = searchParams.get("title")
-
-            return this.response(
-              this.drive.write(path, request, {
-                offset,
-                length,
-                truncate,
-                create,
-                parents,
-                title
-              })
-            )
-          }
-          default: {
-            return new Response(JSON.stringify({ error: "Bad Request" }), {
-              status: 400,
-              statusText: "Bad Request",
-              headers: { "content-type": "application/json" }
-            })
-          }
         }
-      } else {
-        switch (method) {
-          case "INFO": {
-            return this.response(this.driver.stat(pathname))
-          }
-          case "LIST": {
-            return this.response(this.driver.list(pathname))
-          }
-          case "GET": {
-            return this.response(this.driver.fetch(pathname))
-          }
-          default: {
-            return new Response(JSON.stringify({ error: "Bad Request" }), {
-              status: 400,
-              statusText: "Bad Request",
-              headers: { "content-type": "application/json" }
+        case "DELETE": {
+          const recurse = decodeBooleanParam(searchParams, "recursive")
+          return this.response(this.drive.delete(pathname, { recurse }))
+        }
+        case "PUT": {
+          const offset = decodeIntParam(searchParams, "offset")
+          const length = decodeIntParam(searchParams, "length")
+          const truncate = decodeBooleanParam(searchParams, "truncate")
+          const create = decodeBooleanParam(searchParams, "create")
+          const parents = decodeBooleanParam(searchParams, "parents")
+          const title = searchParams.get("title")
+
+          return this.response(
+            this.drive.write(pathname, request, {
+              offset,
+              length,
+              truncate,
+              create,
+              parents,
+              title
             })
-          }
+          )
+        }
+        default: {
+          return new Response(JSON.stringify({ error: "Bad Request" }), {
+            status: 400,
+            statusText: "Bad Request",
+            headers: { "content-type": "application/json" }
+          })
         }
       }
     } else {
@@ -688,215 +600,6 @@ class Address {
     return new Address(protocol, authority, `${base}${relative}`)
   }
 }
-class IPFSDriver /*::implements Driver*/ {
-  static async mount(service /*:IPFSService*/, address /*:Address*/) {
-    const { protocol, authority } = address
-    switch (protocol) {
-      case "ipfs": {
-        const key = authority
-        const origin = await service.formatAsBase32(key)
-        return new IPFSDriver(service, key, origin)
-      }
-      case "ipns":
-      // if protocol unknown assume ipns
-      case "": {
-        const { cid } = await service.resolveName(authority)
-        const origin = authority.split(".").join("_")
-        return new IPFSDriver(service, cid, origin)
-      }
-      default: {
-        throw RangeError(
-          `Address ${address.toString()} is not vaild IPFS resource`
-        )
-      }
-    }
-  }
-  /*::
-  service:IPFSService;
-  cid:string;
-  origin:string;
-  */
-  constructor(service /*:IPFSService*/, cid /*:string*/, origin /*:string*/) {
-    this.service = service
-    this.cid = cid
-    this.origin = origin
-  }
-  resolvePath(path /*:string*/ = "") {
-    return `/ipfs/${this.cid}${path}`
-  }
-  async stat(path /*:string*/) {
-    const arg = this.resolvePath(path)
-    const url = new URL(`/api/v0/files/stat?arg=${arg}`, BASE_URL)
-
-    const response = await this.service.fetch(url)
-    if (response.status === 200) {
-      const { Type: type, CumulativeSize: size } = await response.json()
-      return { type, size }
-    } else {
-      return null
-    }
-  }
-  async list(path /*:string*/) {
-    //   // TODO: Figure out why `/api/v0/files/ls` does not work here.
-    const arg = this.resolvePath(path)
-    const url = new URL(`/api/v0/file/ls?arg=${arg}`, BASE_URL)
-    const response = await this.service.fetch(url)
-    if (response.ok) {
-      const { Objects, Arguments } = await response.json()
-      const entry = Objects[Arguments[arg]]
-      switch (entry.Type) {
-        case "File": {
-          return []
-        }
-        default: {
-          return entry.Links.map(entry => ({
-            type: entry.Type.toLowerCase(),
-            name: entry.Name,
-            size: entry.Size
-          }))
-        }
-      }
-    } else {
-      const message = await response.text()
-      throw new Error(message)
-    }
-  }
-  async fetch(path /*:string*/) {
-    const url = new URL(this.resolvePath(path), BASE_URL)
-    const response = await this.service.fetch(url)
-    if (response.status === 302) {
-      const headers = response.headers
-      const location = headers.get("location")
-      if (location && !location.startsWith("/")) {
-        const { pathname } = new URL(location)
-        // const base = this.resolvePath()
-        // const path = pathname.startsWith(base)
-        //   ? pathname.slice(base.length)
-        //   : pathname
-        // const url = new URL(path, request.url)
-        headers.set("location", pathname)
-      }
-    }
-    return response
-  }
-  async createMount() {
-    return new IPFSResource(
-      this.service,
-      Address.parse(this.resolvePath("data")),
-      this.cid
-    )
-  }
-}
-
-class LocalIPFSDriver /*::implements Driver*/ {
-  /*::
-  service:IPFSService
-  authority:string
-  origin:string
-  */
-  constructor(
-    service /*:IPFSService*/,
-    authority /*:string*/,
-    origin /*:string*/
-  ) {
-    this.service = service
-    this.authority = authority
-    this.origin = origin
-  }
-  resolvePath(path /*:string*/ = "") {
-    return `/Local/${this.authority}${path}`
-  }
-  static async mount(service, address) {
-    const { authority, pathname } = address
-    const key = await service.resolveLocalName(authority)
-
-    if (key != null) {
-      // const encoder = new TextEncoder()
-      // const hash = await window.crypto.subtle.digest(
-      //   "SHA-256",
-      //   encoder.encode(pathname)
-      // )
-      // const origin = `local_${base32Encode(new Uint8Array(hash))}`
-      const domain = `${authority}.local`
-      const origin = encodeURIComponent(
-        domain.replace(/\s/g, "-").replace(/\./g, "_")
-      )
-      return new LocalIPFSDriver(service, authority, origin)
-    } else {
-      throw new RangeError(`Local resource ${address.toString()} not found`)
-    }
-  }
-  async stat(path /*:string*/) {
-    const arg = this.resolvePath(path)
-    const url = new URL(`/api/v0/files/stat?arg=${arg}`, BASE_URL)
-
-    const response = await this.service.fetch(url)
-    if (response.status === 200) {
-      const { Type: type, CumulativeSize: size } = await response.json()
-      return { type, size, open: true }
-    } else {
-      return null
-    }
-  }
-  async list(path /*:string*/) {
-    const arg = this.resolvePath(path)
-    const url = new URL(`/api/v0/files/ls?l=1&arg=${arg}`, BASE_URL)
-    const response = await this.service.fetch(url)
-    if (response.ok) {
-      const { Entries } = await response.json()
-      const entries = Entries.map(entry => ({
-        type: entry.Type === 0 ? "file" : "directory",
-        name: entry.Name,
-        size: entry.Size
-      }))
-      return entries
-    } else {
-      const message = await response.text()
-      throw new Error(message)
-    }
-  }
-  async read(path /*:string*/, { offset, length } /*:ReadOptions*/ = {}) {
-    const arg = this.resolvePath(path)
-    const params = SearchParams({ arg, offset, length })
-    const url = new URL(`/api/v0/files/read?${params.toString()}`, BASE_URL)
-    return await this.service.fetch(url)
-  }
-  detectContentType(path) {
-    const extension = path.slice(path.lastIndexOf("."))
-    return contentTypes[extension]
-  }
-  async cat(path /*:string*/) {
-    const response = await this.read(path)
-    const contentType = this.detectContentType(path)
-    if (contentType) {
-      response.headers.set("content-type", contentType)
-    } else if (!response.headers.has("content-type")) {
-      response.headers.set("content-type", "application/octet-stream")
-    }
-    return response
-  }
-  async fetch(path) {
-    const stat = await this.stat(path)
-    if (stat == null) {
-      return new Response("Not such file", {
-        status: 404
-      })
-    } else if (stat.type === "file") {
-      return await this.cat(path)
-    } else {
-      const file = path.endsWith("/") ? "index.html" : "/index.html"
-      return await this.cat(`${path}${file}`)
-    }
-  }
-  async createMount() {
-    return new LocalIPFSResource(
-      this.service,
-      new Address("local", this.authority, "/"),
-      null,
-      false
-    )
-  }
-}
 
 class IPFSResource /*::implements Resource*/ {
   /*::
@@ -910,16 +613,21 @@ class IPFSResource /*::implements Resource*/ {
     service /*:IPFSService*/,
     address /*:Address*/,
     cid /*:string*/,
+    origin /*:string*/,
     encryption /*:?Encryption*/
   ) {
     this.service = service
     this.address = address
     this.cid = cid
+    this.origin = origin
     this.encryption = encryption
     // TODO: Needs a more reasonable solution
     if (encryption) {
       encryption.algorithm.iv = new Uint8Array(encryption.algorithm.iv)
     }
+  }
+  get authority() {
+    return this.cid
   }
   get open() {
     return false
@@ -927,9 +635,14 @@ class IPFSResource /*::implements Resource*/ {
   get writable() {
     return false
   }
+  get pathname() {
+    return this.address.toString()
+  }
+  static importKeys() {}
   static async mount(service /*:IPFSService*/, address /*:Address*/) {
     const cid = await this.resolveCID(service, address)
     const base = `/ipfs/${cid}${address.pathname}`
+    const origin = await service.formatAsBase32(cid)
     const path = Path.resolve(Path.directory(base), ".keychain")
     const file = await this.read(service, path)
     const keychain = file.ok ? await file.json() : null
@@ -942,9 +655,9 @@ class IPFSResource /*::implements Resource*/ {
         true,
         ["encrypt", "decrypt"]
       )
-      return new IPFSResource(service, address, cid, { key, algorithm })
+      return new IPFSResource(service, address, cid, origin, { key, algorithm })
     } else {
-      return new IPFSResource(service, address, cid, null)
+      return new IPFSResource(service, address, cid, origin, null)
     }
   }
   static async resolveCID(service /*:IPFSService*/, address /*:Address*/) {
@@ -994,7 +707,8 @@ class IPFSResource /*::implements Resource*/ {
           return entry.Links.map(entry => ({
             type: entry.Type.toLowerCase(),
             name: entry.Name,
-            size: entry.Size
+            size: entry.Size,
+            path: `${path}${entry.Name}`
           }))
         }
       }
@@ -1011,6 +725,24 @@ class IPFSResource /*::implements Resource*/ {
     const params = SearchParams({ arg: path, offset, length })
     const url = new URL(`/api/v0/cat?${params.toString()}`, BASE_URL)
     return await service.fetch(url)
+  }
+  async fetch(path /*:string*/) {
+    const url = new URL(this.resolvePath(path), BASE_URL)
+    const response = await this.service.fetch(url)
+    if (response.status === 302) {
+      const headers = response.headers
+      const location = headers.get("location")
+      if (location && !location.startsWith("/")) {
+        const { pathname } = new URL(location)
+        // const base = this.resolvePath()
+        // const path = pathname.startsWith(base)
+        //   ? pathname.slice(base.length)
+        //   : pathname
+        // const url = new URL(path, request.url)
+        headers.set("location", pathname)
+      }
+    }
+    return response
   }
   static async write(
     service /*:IPFSService*/,
@@ -1127,10 +859,24 @@ class LocalIPFSResource /*::implements Resource*/ {
       encryption.algorithm.iv = new Uint8Array(encryption.algorithm.iv)
     }
   }
+  get authority() {
+    return this.address.authority
+  }
+  get pathname() {
+    return this.address.toString()
+  }
+  get origin() {
+    const { authority } = this.address
+    const domain = `${authority}.local`
+    const origin = encodeURIComponent(
+      domain.replace(/\s/g, "-").replace(/\./g, "_")
+    )
+    return origin
+  }
   get writable() {
     return this.open
   }
-  static async stat(service, path) {
+  static async stat(service, path) /*:Promise<?Stat>*/ {
     const url = new URL(`/api/v0/files/stat?arg=${path}`, BASE_URL)
 
     const response = await service.fetch(url)
@@ -1146,10 +892,11 @@ class LocalIPFSResource /*::implements Resource*/ {
     const response = await service.fetch(url)
     if (response.ok) {
       const { Entries } = await response.json()
-      const entries = Entries.map(entry => ({
+      const entries = (Entries || []).map(entry => ({
         type: entry.Type === 0 ? "file" : "directory",
         name: entry.Name,
-        size: entry.Size
+        size: entry.Size,
+        path: `${path}${entry.Name}`
       }))
       return entries
     } else {
@@ -1197,24 +944,45 @@ class LocalIPFSResource /*::implements Resource*/ {
     }
   }
   static resolveResourcePath(address /*:Address*/) {
-    return `/Local/${address.authority}.data${address.pathname}.data`
+    if (address.pathname.startsWith("/data/")) {
+      return `/Local/${address.authority}.${address.pathname.slice(1)}.data`
+    } else {
+      return `/Local/${address.authority}${address.pathname}`
+    }
+  }
+  static async importKeys(service, address /*:Address*/) {
+    try {
+      const path = this.resolveResourcePath(address)
+      const file = await this.read(service, `${path}/.keychain`)
+      const keychain = file.ok ? await file.json() : null
+      if (keychain) {
+        const { data, algorithm } = keychain.base
+        const key = await window.crypto.subtle.importKey(
+          "jwk",
+          data,
+          algorithm,
+          true,
+          ["encrypt", "decrypt"]
+        )
+        return { key, algorithm }
+      } else {
+        return null
+      }
+    } catch (_) {
+      return null
+    }
   }
   static async mount(service, address /*:Address*/, open /*:boolean*/) {
-    const path = this.resolveResourcePath(address)
-    const file = await this.read(service, `${path}/.keychain`)
-    const keychain = file.ok ? await file.json() : null
-    if (keychain) {
-      const { data, algorithm } = keychain.base
-      const key = await window.crypto.subtle.importKey(
-        "jwk",
-        data,
-        algorithm,
-        true,
-        ["encrypt", "decrypt"]
-      )
-      return new LocalIPFSResource(service, address, { key, algorithm }, open)
+    const encryption = await this.importKeys(service, address)
+    if (encryption) {
+      return new LocalIPFSResource(service, address, encryption, open)
     } else {
-      throw new RangeError(`Local resource not found`)
+      const key = await service.resolveLocalName(address.authority)
+      if (key == null) {
+        throw new RangeError(`No resource found for "${address.toString()}"`)
+      } else {
+        return new LocalIPFSResource(service, address, null, open)
+      }
     }
   }
   static async create(service, address, open /*:boolean*/) {
@@ -1309,125 +1077,221 @@ class LocalIPFSResource /*::implements Resource*/ {
       options
     )
   }
+  detectContentType(path) {
+    const extension = path.slice(path.lastIndexOf("."))
+    return contentTypes[extension]
+  }
+  async cat(path /*:string*/) {
+    const response = await this.read(path)
+    const contentType = this.detectContentType(path)
+    if (contentType) {
+      response.headers.set("content-type", contentType)
+    } else if (!response.headers.has("content-type")) {
+      response.headers.set("content-type", "application/octet-stream")
+    }
+    return response
+  }
+  async fetch(path) {
+    const stat = await this.stat(path)
+    if (stat == null) {
+      return new Response("Not such file", {
+        status: 404
+      })
+    } else if (stat.type === "file") {
+      return await this.cat(path)
+    } else {
+      const file = path.endsWith("/") ? "index.html" : "/index.html"
+      return await this.cat(`${path}${file}`)
+    }
+  }
 }
 
 class IPFSDrive /*::implements Drive*/ {
   /*::
-  authority:string
+  root:Resource
   service:IPFSService
   opened:?{path:string, resource:Resource}
   */
-  constructor(service /*:IPFSService*/, authority /*:string*/) {
+  constructor(service /*:IPFSService*/, root /*:Resource*/) {
     this.service = service
-    this.authority = authority
+    this.root = root
   }
-  resolvePath(path /*:string*/) {
-    return `/Local/${this.authority}.data${path}`
+  get authority() {
+    return this.root.authority
   }
-  resolve(path /*:string*/ = "") {
+  resolveDataPath(path /*:string*/) {
+    return `/Local/${this.authority}.${path.slice(1)}`
+  }
+  resolveData(path /*:string*/ = "") {
     const { opened } = this
     const result =
       opened == null
-        ? [this.resolvePath(path), null]
-        : path.startsWith("/@/")
-        ? [path.slice(2), opened.resource]
+        ? [this.resolveDataPath(path), null]
+        : path.startsWith("/data/@/")
+        ? [path.slice(7), opened.resource]
         : path.startsWith(opened.path)
         ? [path.slice(opened.path.length), opened.resource]
-        : [this.resolvePath(path), null]
+        : [this.resolveDataPath(path), null]
     return result
   }
   async stat(path /*:string*/) {
-    const [arg, resource] = this.resolve(path)
-    if (resource) {
-      return await resource.stat(arg)
-    } else {
-      const url = new URL(`/api/v0/files/stat?arg=${arg}`, BASE_URL)
-      const response = await this.service.fetch(url)
-      if (response.status === 200) {
-        const { Type: type, CumulativeSize: size } = await response.json()
-        return { type, size }
+    if (path.startsWith("/data")) {
+      const [arg, resource] = this.resolveData(path)
+      if (resource) {
+        return await resource.stat(arg)
       } else {
-        return null
+        const url = new URL(`/api/v0/files/stat?arg=${arg}`, BASE_URL)
+        const response = await this.service.fetch(url)
+        if (response.status === 200) {
+          const { Type: type, CumulativeSize: size } = await response.json()
+          return { type, size }
+        } else {
+          return null
+        }
       }
+    } else {
+      return await this.root.stat(path)
     }
   }
-  async list(path /*:string*/) {
-    const [arg, resource] = this.resolve(path)
-    if (resource) {
-      const entries = await resource.list(arg)
-      return entries.map(entry => {
-        if (entry.type === "file") {
-          return {
-            type: "file",
-            name: entry.name,
+  async list(input /*:string*/) {
+    const path = input.charAt(input.length - 1) === "/" ? input : `${input}/`
+    if (path.startsWith("/data")) {
+      const [arg, resource] = this.resolveData(path)
+      if (resource) {
+        const entries = await resource.list(arg)
+        return entries.map(entry => {
+          const driveEntry = {
+            ...entry,
+            // type: entry.type,
+            // name: entry.name,
             path: `${path}${entry.name}`
+            // size: entry.size
           }
-        } else {
-          return {
-            type: "directory",
-            name: entry.name,
-            path: `${path}${entry.name}`
-          }
-        }
-      })
-    } else {
-      const url = new URL(`/api/v0/files/ls?l=1&arg=${arg}`, BASE_URL)
-      const response = await this.service.fetch(url)
-      if (response.ok) {
-        const openedPath = this.opened && this.opened.path
-        const { Entries } = await response.json()
-        const entries = Entries.map(entry => {
-          const { Name: entryName, Type: entryType, Size: size } = entry
-          const type = entryName.endsWith(".data") ? "data" : "directory"
-          const name =
-            type === "data"
-              ? entryName.slice(0, entryName.length - 5)
-              : entryName
-          const pathname = `${path}${name}`
-          const open = type === "data" && pathname === openedPath
 
-          return { name, type, path: pathname, open, writable: open }
+          // @noflow
+          return driveEntry
         })
-
-        const { opened } = this
-
-        if (path === "/" && opened) {
-          entries.push({
-            name: "@",
-            path: "/@",
-            open: true,
-            writable: opened.resource.writable,
-            type: "data"
-          })
-        }
-
-        return entries
-      } else if (response.status === 404) {
-        if (path === "/") {
-          return []
-        } else {
-          throw Error("Not such resource")
-        }
       } else {
-        const message = await response.text()
-        throw new Error(message)
+        const url = new URL(`/api/v0/files/ls?l=1&arg=${arg}`, BASE_URL)
+        const response = await this.service.fetch(url)
+        if (response.ok) {
+          const openedPath = this.opened && this.opened.path
+          const { Entries } = await response.json()
+          const entries /*:DriveEntry[]*/ = []
+          let openedEntry = null
+          for (const entry of Entries || []) {
+            const { Name: entryName, Type: entryType, Size: size } = entry
+            const type = entryName.endsWith(".data") ? "data" : "directory"
+            const name =
+              type === "data"
+                ? entryName.slice(0, entryName.length - 5)
+                : entryName
+            const pathname = `${path}${name}`
+            const open = type === "data" && pathname === openedPath
+
+            if (type === "data") {
+              const entry /*:DataEntry*/ = {
+                type: "data",
+                path: pathname,
+                size,
+                name,
+                type,
+                open,
+                writable: open
+              }
+              entries.push(entry)
+              if (open) {
+                openedEntry = entry
+              }
+            } else {
+              const entry /*:DirectoryEntry*/ = {
+                type: "directory",
+                name,
+                type,
+                size,
+                path: pathname
+              }
+              entries.push(entry)
+            }
+          }
+
+          const { opened } = this
+
+          if (path === "/data/" && opened && !openedEntry) {
+            openedEntry = {
+              type: "data",
+              name: "@",
+              path: "/data/@",
+              open: true,
+              writable: opened.resource.writable,
+              size: -1
+            }
+
+            entries.push(openedEntry)
+          }
+
+          return entries
+        } else if (response.status === 404) {
+          if (path === "/") {
+            return []
+          } else {
+            throw Error("Not such resource")
+          }
+        } else {
+          const message = await response.text()
+          throw new Error(message)
+        }
       }
+    } else {
+      const entries = await this.root.list(path)
+      const result = []
+      for (const entry of entries) {
+        entry.path = `${path}${entry.name}`
+        if (entry.path != "/data") {
+          result.push(entry)
+        }
+      }
+
+      if (path === "/") {
+        result.push({
+          type: "directory",
+          name: "data",
+          path: "/data",
+          size: -1
+        })
+      }
+      return result
     }
   }
   async watch(path /*:string*/) {
-    const [arg, resource] = this.resolve(path)
-    if (resource) {
-      return await resource.watch(arg)
+    if (path.startsWith("/data")) {
+      const [arg, resource] = this.resolveData(path)
+      if (resource) {
+        return await resource.watch(arg)
+      } else {
+        throw Error("Can only watch open resources")
+      }
     } else {
-      throw Error("Can only watch open resources")
+      return this.root.watch(path)
     }
   }
   async read(path /*:string*/, options /*::?:ReadOptions*/) {
-    const [arg, resource] = this.resolve(path)
-    if (resource) {
-      return await resource.read(arg, options)
+    if (path.startsWith("/data")) {
+      const [arg, resource] = this.resolveData(path)
+      if (resource) {
+        return await resource.read(arg, options)
+      } else {
+        throw Error("Can only read from open resources")
+      }
     } else {
-      throw Error("Can only read from open resources")
+      if (
+        (options && options.offset) != null ||
+        (options && options.length) != null
+      ) {
+        return this.root.read(path, options)
+      } else {
+        return this.root.fetch(path)
+      }
     }
   }
   async write(
@@ -1435,31 +1299,41 @@ class IPFSDrive /*::implements Drive*/ {
     content /*:Request|Response*/,
     options /*::?:WriteOptions*/
   ) {
-    const [arg, resource] = this.resolve(path)
-    if (resource) {
-      return await resource.write(arg, content, options)
+    if (path.startsWith("/data")) {
+      const [arg, resource] = this.resolveData(path)
+      if (resource) {
+        return await resource.write(arg, content, options)
+      } else {
+        throw Error("Can only write into open resources")
+      }
     } else {
       throw Error("Can only write into open resources")
     }
   }
   async delete(path /*:string*/, options /*::?:DeletOptions*/) {
-    const [arg, resource] = this.resolve(path)
-    if (resource) {
-      return await resource.delete(arg, options)
+    if (path.startsWith("/data")) {
+      const [arg, resource] = this.resolveData(path)
+      if (resource) {
+        return await resource.delete(arg, options)
+      } else {
+        throw Error("Can only delete open resources")
+      }
     } else {
       throw Error("Can only delete open resources")
     }
   }
   async open(path, options /*:OpenOptions*/) {
-    const address = new Address("", this.authority, path)
-    if (path === "/") {
+    if (path === "/data/" || path === "/data") {
       return await this.select(options)
-    } else {
+    } else if (path.startsWith("/data")) {
+      const address = new Address("", this.authority, path)
       const resource =
         options.create != null
           ? await LocalIPFSResource.create(this.service, address, true)
           : await LocalIPFSResource.mount(this.service, address, true)
-      return this.mount(resource)
+      return await this.mount(resource)
+    } else {
+      throw Error("Can only open documents in /data/")
     }
   }
   async select(path) {
@@ -1909,11 +1783,29 @@ type Stat = {
   size:number;
 }
 
-type Entry = {
-  type:"directory"|"file";
-  name:string;
-  size:number;
+type FileEntry = {
+  type: "file";
+  name: string;
+  size: number;
+  path: string;
 }
+
+type DirectoryEntry = {
+  type: "directory";
+  name: string;
+  size: number;
+  path: string;
+}
+
+type DataEntry = {
+  type: "data";
+  name: string;
+  size: number;
+  open: boolean;
+  path: string;
+}
+
+type Entry = FileEntry | DirectoryEntry
 
 interface DeletOptions {
   recursive?:?boolean;
@@ -1923,12 +1815,16 @@ interface Resource {
   +open:boolean;
   +writable:boolean;
   +address:Address;
+  +pathname:string;
+  +origin:string;
+  +authority:string;
   stat(string):Promise<?Stat>;
   list(string):Promise<Entry[]>;
   watch(string):Promise<Response>;
   read(string, options?:ReadOptions):Promise<Response>;
   write(string, Request|Response, options?:WriteOptions):Promise<void>;
   delete(string, options?:DeletOptions):Promise<void>;
+  fetch(string):Promise<Response>;
 }
 
 type OpenOptions = {
@@ -1939,17 +1835,18 @@ type OpenOptions = {
 
 
 interface Driver {
-  origin:string;
+  +authority:string;
+  +origin:string;
   stat(string):Promise<?Stat>;
   list(string):Promise<Entry[]>;
-  fetch(string):Promise<Response>;
-  createMount():Promise<Resource>;
+  // fetch(string):Promise<Response>;
+  // createMount():Promise<Resource>;
 }
 
 type DriveEntry =
-  | { type: "file", name:string, path:string }
-  | { type: "directory", name:string, path:string }
-  | { type: "document", name:string, open:boolean, path:string }
+  | FileEntry
+  | DirectoryEntry
+  | DataEntry
 
 interface Drive {
   opened:?{path:string, resource:Resource};
