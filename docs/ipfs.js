@@ -273,13 +273,12 @@ class BrowserNode {
     this.multiaddr = multiaddr
     this.CID = CID
 
-    const daemon = new self.Ipfs()
-    this.daemon = daemon
+    this.daemon = new self.Ipfs()
     this.gateway = self.IpfsHttpResponse
     this.ready = this.activate()
   }
   async activate() {
-    await onready(this.daemon)
+    await this.daemon.ready
     this.dagPB = await this.daemon._ipld._getFormat("dag-pb")
   }
   async connect(connection) {}
@@ -1217,10 +1216,6 @@ const nodeSreamAsBlob = (stream, options) /*:Promise<Blob>*/ =>
       .on("end", () => resolve(new Blob(chunks, options)))
       .on("error", reject)
   })
-
-const once = type => target =>
-  new Promise(resolve => target.once(type, resolve))
-const onready = once("ready")
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
 
