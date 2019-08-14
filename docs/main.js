@@ -81,6 +81,16 @@ export class UserAgent {
     window.addEventListener("message", this)
   }
   async activateServiceWorker() {
+    // Disable service worker in dev setup as SW makes dev cycles
+    // a bit more complicated.
+    const { origin } = new URL(this.ownerDocument.location.href)
+    if (
+      origin === "https://lunet.dev" ||
+      origin === "http://localhost" ||
+      origin === "https://localhost"
+    ) {
+      return this.onStatusChange({ status: "ready" })
+    }
     const { serviceWorker } = this.ownerDocument.defaultView.navigator
     if (serviceWorker == null) {
       this.onStatusChange({ status: "unavailable" })

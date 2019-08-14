@@ -17,6 +17,7 @@ const main = async port => {
     names: [
       "DNS:localhost",
       "DNS:lunet.link",
+      "DNS:lunet.dev",
       "DNS:*.lunet.link",
       "DNS:celestial.link",
       "DNS:*.celestial.link",

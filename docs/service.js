@@ -3,7 +3,7 @@
 const NAME = "service"
 const VERSION = "0.0.11"
 const ID = `${NAME}@${VERSION}`
-const serviceURL = new URL("https://lunet.link/")
+const serviceURL = new URL("/", self.location)
 
 const install = (event /*:InstallEvent*/) => {
   console.log(`Proxy installed at ${self.registration.scope}`)
