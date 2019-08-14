@@ -293,8 +293,26 @@ class BrowserNode {
     return BrowserNode.request(this, request.request, port)
   }
   respond(response, port, origin) {}
-  gatewayRequest(path) {
-    return this.gateway.getResponse(this.daemon, path)
+  async gatewayRequest(path, limit = 5) {
+    // Native node does not do redirects, instead it just returns the content.
+    // We follow redirects here to match that behavior and avoid back and forth.
+    // Additionally it's not always obvious how to resolve application URL based
+    // on redirects (e.g. CID base CID is different). By doing all the redirects
+    // here we avoid those difficult questions.
+    let n = 0
+    let location = path
+    while (n < limit) {
+      const response = await this.gateway.getResponse(this.daemon, location)
+      if (response.status === 302) {
+        const url = new URL(response.headers.get("location"), self.location)
+        location = url.pathname
+        n++
+      } else {
+        return response
+      }
+    }
+
+    throw new RangeError("Reached redirect limit")
   }
   static async request(
     ipfs /*:BrowserNode*/,
@@ -892,10 +910,8 @@ class BrowserNode {
         }
         default: {
           if (pathname.startsWith("/ipfs/") || pathname.startsWith("/ipns/")) {
-            return encodeResponse(
-              await ipfs.gatewayRequest(pathname),
-              request.url
-            )
+            const response = await ipfs.gatewayRequest(pathname)
+            return encodeResponse(response, request.url)
           } else {
             return {
               url: request.url,
