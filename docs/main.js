@@ -176,34 +176,6 @@ export class UserAgent {
       }
     }
   }
-  // async createDriver(address /*:Address*/) /*:Promise<Driver>*/ {
-  //   const service = this.services
-  //   switch (address.protocol) {
-  //     case "ipfs":
-  //     case "ipns":
-  //       return await IPFSDriver.mount(service.ipfs, address)
-  //     case "local":
-  //       return await LocalIPFSDriver.mount(service.ipfs, address)
-  //     case "": {
-  //       // If protocol is unknown attempt to open as local resource
-  //       // first otherwise attempt to open as IPNS resource
-  //       try {
-  //         return await LocalIPFSDriver.mount(service.ipfs, address)
-  //       } catch (error) {
-  //         return await IPFSDriver.mount(service.ipfs, address)
-  //       }
-  //     }
-  //     default: {
-  //       const { protocol, authority, pathname } = address
-  //       const fallback = new Address("", protocol, `/${authority}${pathname}`)
-  //       try {
-  //         return await this.createDriver(fallback)
-  //       } catch (_) {
-  //         throw RangeError(`Unsupported resource address ${address.toString()}`)
-  //       }
-  //     }
-  //   }
-  // }
   createFrame() {
     const iframe = this.ownerDocument.createElement("iframe")
     iframe.setAttribute("sandbox", SANDBOX_OPTIONS.join(" "))
@@ -237,12 +209,6 @@ export class UserAgent {
     })
     return menu
   }
-  // mount(resource /*:Resource*/) {
-  //   this.mountedResource = resource
-  //   this.mountAddress = resource.address
-  //   this.frame.setAttribute("data-mount", resource.address.toString())
-  //   this.ownerDocument.defaultView.history.pushState(null, "", this.pathname)
-  // }
   get sandboxURL() {
     const { search, hash } = this
     const { origin } = this.driver
@@ -381,56 +347,6 @@ export class UserAgent {
       })
     }
   }
-  // async stat(path /*:string*/) {
-  //   const mountedResource = await this.mountedResource
-  //   const info = await mountedResource.stat(path)
-  //   if (info === null) {
-  //     throw { status: 404, message: "Not such file or directory" }
-  //   } else {
-  //     return info
-  //   }
-  // }
-  // async list(path /*:string*/) {
-  //   const mountedResource = await this.mountedResource
-  //   const entries = mountedResource.list(path)
-  //   return entries
-  // }
-  // async watch(path /*:string*/) {
-  //   const mountedResource = await this.mountedResource
-  //   return mountedResource.watch(path)
-  // }
-  // async read(path /*:string*/, options /*::?:ReadOptions*/) {
-  //   const mountedResource = await this.mountedResource
-  //   return mountedResource.read(path, options)
-  // }
-  // async fork() {
-  //   return this.mountedResource
-  // }
-  // async write(
-  //   path /*:string*/,
-  //   content /*:Request*/,
-  //   options /*:{offset:?number, length:?number, parents:?boolean, truncate:?boolean, create:?boolean, title:?string}*/
-  // ) {
-  //   const mountedResource = await this.mountedResource
-  //   if (mountedResource.open) {
-  //     return mountedResource.write(path, content, options)
-  //   } else {
-  //     const mountedResource = await this.fork()
-  //     return mountedResource.write(path, content, options)
-  //   }
-  // }
-  // async delete(path /*:string*/, options /*::?:DeletOptions*/) {
-  //   const mountedResource = await this.mountedResource
-  //   if (mountedResource.open) {
-  //     return mountedResource.delete(path, options)
-  //   } else {
-  //     try {
-  //       const stat = await mountedResource.stat(path)
-  //       const resource = await this.fork()
-  //       return resource.delete(path, options)
-  //     } catch (error) {}
-  //   }
-  // }
   async open(path /*:string*/, options /*:OpenOptions*/) {
     const result = await this.drive.open(path, options)
     const { opened } = this.drive
