@@ -122,14 +122,16 @@ export class LunetClient {
     Object.defineProperties(History$prototype, {
       pushState: {
         value(state, title, url) {
-          pushState.call(this, state, title, url)
-          self.pushState(state, title, url)
+          const href = `${url}`
+          pushState.call(this, state, title, href)
+          self.pushState(state, title, href)
         }
       },
       replaceState: {
         value(state, title, url) {
-          replaceState.call(this, state, title, url)
-          self.replaceState(state, title, url)
+          const href = `${url}`
+          replaceState.call(this, state, title, href)
+          self.replaceState(state, title, href)
         }
       }
     })
